@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TTS ApliArte — Traduccion y voz para Twitch</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f1e8;
+        --bg-2: #efe5d9;
+        --ink: #1f1b18;
+        --muted: #5c4f45;
+        --accent: #1b998b;
+        --accent-2: #f4a261;
+        --card: #ffffff;
+        --line: rgba(31, 27, 24, 0.1);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Space Grotesk", sans-serif;
+        color: var(--ink);
+        background: radial-gradient(circle at top left, #ffffff 0%, var(--bg) 45%, var(--bg-2) 100%);
+        min-height: 100vh;
+      }
+
+      .page {
+        position: relative;
+        overflow: hidden;
+      }
+
+      .glow {
+        position: absolute;
+        width: 520px;
+        height: 520px;
+        background: radial-gradient(circle, rgba(27, 153, 139, 0.25) 0%, rgba(27, 153, 139, 0) 70%);
+        top: -120px;
+        right: -140px;
+        z-index: 0;
+      }
+
+      .ring {
+        position: absolute;
+        width: 420px;
+        height: 420px;
+        border-radius: 50%;
+        border: 2px dashed rgba(244, 162, 97, 0.35);
+        bottom: -220px;
+        left: -120px;
+        z-index: 0;
+        animation: spin 24s linear infinite;
+      }
+
+      @keyframes spin {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 28px 8vw;
+        position: relative;
+        z-index: 2;
+      }
+
+      .logo {
+        font-weight: 700;
+        letter-spacing: 0.03em;
+      }
+
+      .tagline {
+        font-size: 0.9rem;
+        color: var(--muted);
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 36px;
+        padding: 40px 8vw 80px;
+        position: relative;
+        z-index: 2;
+        align-items: center;
+      }
+
+      .hero h1 {
+        font-family: "Fraunces", serif;
+        font-size: clamp(2.4rem, 3.6vw, 4rem);
+        line-height: 1.05;
+        margin: 0 0 16px;
+      }
+
+      .hero p {
+        color: var(--muted);
+        font-size: 1.05rem;
+        margin: 0 0 24px;
+      }
+
+      .cta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      .btn {
+        padding: 12px 20px;
+        border-radius: 999px;
+        font-weight: 600;
+        border: 1px solid transparent;
+        text-decoration: none;
+        color: var(--ink);
+        background: var(--card);
+        box-shadow: 0 12px 24px rgba(31, 27, 24, 0.08);
+      }
+
+      .btn.primary {
+        background: var(--accent);
+        color: #fff;
+      }
+
+      .btn.ghost {
+        border-color: var(--line);
+      }
+
+      .hero-card {
+        background: var(--card);
+        border-radius: 24px;
+        padding: 24px;
+        box-shadow: 0 18px 40px rgba(31, 27, 24, 0.08);
+        display: grid;
+        gap: 16px;
+      }
+
+      .hero-card .chip {
+        align-self: start;
+        display: inline-flex;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: rgba(27, 153, 139, 0.12);
+        color: var(--accent);
+        font-weight: 600;
+        font-size: 0.85rem;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 18px;
+        padding: 0 8vw 80px;
+        position: relative;
+        z-index: 2;
+      }
+
+      .card {
+        background: var(--card);
+        padding: 20px;
+        border-radius: 18px;
+        border: 1px solid var(--line);
+        box-shadow: 0 12px 24px rgba(31, 27, 24, 0.06);
+      }
+
+      .card h3 {
+        margin: 0 0 8px;
+        font-size: 1.05rem;
+      }
+
+      .card p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .section-title {
+        padding: 0 8vw 16px;
+        font-size: 1.2rem;
+        font-weight: 600;
+      }
+
+      .pipeline {
+        padding: 0 8vw 80px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 12px;
+      }
+
+      .step {
+        border-left: 4px solid var(--accent-2);
+        padding: 12px 16px;
+        background: rgba(255, 255, 255, 0.75);
+        border-radius: 12px;
+      }
+
+      .footer {
+        padding: 32px 8vw 64px;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .fade-up {
+        animation: fadeUp 0.8s ease both;
+      }
+
+      @keyframes fadeUp {
+        from {
+          opacity: 0;
+          transform: translateY(18px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @media (max-width: 720px) {
+        header {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 8px;
+        }
+        .cta-row {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="glow"></div>
+      <div class="ring"></div>
+
+      <header>
+        <div class="logo">TTS ApliArte</div>
+        <div class="tagline">Traduccion en vivo y voz clara para Twitch</div>
+      </header>
+
+      <section class="hero">
+        <div class="fade-up">
+          <h1>Convierte tu chat en una voz global.</h1>
+          <p>
+            Traduce y lee mensajes en tiempo real, filtra ruido, y conecta tu stream con una
+            experiencia clara para audiencia hispana y multilenguaje.
+          </p>
+          <div class="cta-row">
+            <a class="btn primary" href="#">Probar en desktop</a>
+            <a class="btn ghost" href="#">Ver overlay OBS</a>
+            <a class="btn ghost" href="manual.html">Manual de uso</a>
+          </div>
+        </div>
+        <div class="hero-card fade-up" style="animation-delay: 0.1s;">
+          <span class="chip">Enfocado en streamers hispanos</span>
+          <h3>Pipeline listo para directo</h3>
+          <p>
+            Twitch IRC → filtros → traduccion → voz. Con soporte para VibeVoice, WebSockets y
+            comandos por voz.
+          </p>
+          <div class="cta-row">
+            <span class="btn">System TTS</span>
+            <span class="btn">VibeVoice</span>
+          </div>
+        </div>
+      </section>
+
+      <div class="section-title">Lo que hace distinto a TTS ApliArte</div>
+      <section class="grid">
+        <div class="card fade-up">
+          <h3>Traduccion inteligente</h3>
+          <p>Auto traduccion con API configurable y envio opcional al canal.</p>
+        </div>
+        <div class="card fade-up" style="animation-delay: 0.05s;">
+          <h3>Filtro anti spam</h3>
+          <p>Levenshtein por usuario y global para evitar mensajes repetidos.</p>
+        </div>
+        <div class="card fade-up" style="animation-delay: 0.1s;">
+          <h3>Comandos por voz</h3>
+          <p>Poof y ban por STT, pausa automatica cuando hablas.</p>
+        </div>
+        <div class="card fade-up" style="animation-delay: 0.15s;">
+          <h3>Overlay editable</h3>
+          <p>Generador de URL con estilos tipo tts.bot para OBS.</p>
+        </div>
+      </section>
+
+      <div class="section-title">Pipeline en 4 pasos</div>
+      <section class="pipeline">
+        <div class="step">1. Twitch IRC escucha tu chat en tiempo real.</div>
+        <div class="step">2. Filtros limpian menciones, emotes y spam.</div>
+        <div class="step">3. Traduccion auto (si procede) y envio opcional.</div>
+        <div class="step">4. TTS System o VibeVoice reproduce con claridad.</div>
+      </section>
+
+      <div class="section-title">Integraciones</div>
+      <section class="grid">
+        <div class="card">
+          <h3>Node-RED / Webhooks</h3>
+          <p>Envia STT a ws://localhost:1880/stt o enruta chat por websockets.</p>
+        </div>
+        <div class="card">
+          <h3>VibeVoice</h3>
+          <p>Motor neural con streaming PCM16 para voces mas naturales.</p>
+        </div>
+        <div class="card">
+          <h3>OBS friendly</h3>
+          <p>Overlay listo para integrar en escenas con estilo editable.</p>
+        </div>
+      </section>
+
+      <div class="footer">
+        Hecho para streamers hispanos que quieren traducir y dar voz a su chat con control total.
+      </div>
+    </div>
+  </body>
+</html>

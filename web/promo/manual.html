@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Manual TTS ApliArte</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Space+Grotesk:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f1e8;
+        --bg-2: #efe5d9;
+        --ink: #1f1b18;
+        --muted: #5c4f45;
+        --accent: #1b998b;
+        --accent-2: #f4a261;
+        --card: #ffffff;
+        --line: rgba(31, 27, 24, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Space Grotesk", sans-serif;
+        background: linear-gradient(140deg, var(--bg) 0%, var(--bg-2) 100%);
+        color: var(--ink);
+      }
+
+      header {
+        padding: 32px 8vw 12px;
+      }
+
+      header h1 {
+        font-family: "Fraunces", serif;
+        margin: 0 0 8px;
+        font-size: clamp(2rem, 3vw, 2.8rem);
+      }
+
+      header p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .container {
+        padding: 0 8vw 80px;
+        display: grid;
+        gap: 18px;
+      }
+
+      .card {
+        background: var(--card);
+        border-radius: 16px;
+        padding: 20px;
+        border: 1px solid var(--line);
+        box-shadow: 0 12px 28px rgba(31, 27, 24, 0.06);
+      }
+
+      .card h2 {
+        margin: 0 0 12px;
+        font-size: 1.2rem;
+      }
+
+      .card p {
+        margin: 0 0 12px;
+        color: var(--muted);
+      }
+
+      .card ol,
+      .card ul {
+        margin: 0;
+        padding-left: 18px;
+        color: var(--muted);
+      }
+
+      .tag {
+        display: inline-flex;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: rgba(27, 153, 139, 0.12);
+        color: var(--accent);
+        font-weight: 600;
+        font-size: 0.8rem;
+        margin-bottom: 8px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 16px;
+      }
+
+      .code {
+        background: #111010;
+        color: #f5f3f0;
+        padding: 12px;
+        border-radius: 10px;
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+        font-size: 0.9rem;
+        overflow-x: auto;
+      }
+
+      .footer {
+        padding: 32px 8vw 64px;
+        font-size: 0.9rem;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Manual rapido de TTS ApliArte</h1>
+      <p>Guia practica para montar traduccion y TTS en Twitch en menos de 10 minutos.</p>
+    </header>
+
+    <main class="container">
+      <section class="card">
+        <span class="tag">Paso 1</span>
+        <h2>Arranque local</h2>
+        <p>Desde la carpeta del proyecto:</p>
+        <div class="code">flutter pub get
+flutter run -d macos</div>
+      </section>
+
+      <section class="card">
+        <span class="tag">Paso 2</span>
+        <h2>Credenciales de Twitch</h2>
+        <ul>
+          <li>Username: tu usuario de Twitch.</li>
+          <li>OAuth Token: token de chat en formato <strong>oauth:xxxxx</strong>.</li>
+          <li>Channel: canal que quieres leer.</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <span class="tag">Paso 3</span>
+        <h2>Traduccion en vivo</h2>
+        <ul>
+          <li>Source Language: deja <strong>auto</strong> para detectar idioma.</li>
+          <li>Dest Language: ejemplo <strong>es</strong>, <strong>en</strong>, <strong>pt</strong>.</li>
+          <li>Translation API Base URL: servidor compatible (ej: LibreTranslate).</li>
+          <li>Opcional: enviar traducciones al chat.</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <span class="tag">Paso 4</span>
+        <h2>Motor de voz</h2>
+        <div class="grid">
+          <div>
+            <h3>System TTS</h3>
+            <p>Usa las voces del sistema operativo. Selecciona idioma y voz.</p>
+          </div>
+          <div>
+            <h3>VibeVoice</h3>
+            <p>Motor neural. Requiere servidor local en <strong>ws://localhost:3000</strong>.</p>
+          </div>
+        </div>
+        <p>Ejemplo para iniciar VibeVoice:</p>
+        <div class="code">python -m uvicorn demo.web.app:app --reload --port 3000</div>
+        <p>Para pruebas rapidas:</p>
+        <div class="code">python -m uvicorn demo.web.fake_server:app --reload --port 3000</div>
+      </section>
+
+      <section class="card">
+        <span class="tag">Paso 5</span>
+        <h2>Mic y comandos de voz</h2>
+        <ul>
+          <li>Activa <strong>Use Speech Recognition</strong>.</li>
+          <li>Poof: para cortar TTS actual.</li>
+          <li>Ban: corta y reproduce confirmacion.</li>
+          <li>Pausa TTS cuando hablas para evitar solapado.</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <span class="tag">Paso 6</span>
+        <h2>Overlay para OBS</h2>
+        <ul>
+          <li>En la seccion Overlay copia la URL generada.</li>
+          <li>En OBS usa "Browser Source" y pega la URL.</li>
+          <li>Personaliza colores y tipografia en el panel.</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <span class="tag">Problemas tipicos</span>
+        <ul>
+          <li>Sin audio: revisa el motor TTS y el dispositivo de salida.</li>
+          <li>No conecta Twitch: token OAuth incorrecto o canal mal escrito.</li>
+          <li>Sin traduccion: API no disponible o idioma destino en auto.</li>
+          <li>VibeVoice mudo: confirma sample rate 24000 y servidor activo.</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <span class="tag">Checklist rapido</span>
+        <ol>
+          <li>Token OAuth correcto.</li>
+          <li>Conectado a Twitch.</li>
+          <li>Idioma destino definido.</li>
+          <li>Motor TTS elegido.</li>
+          <li>Overlay listo si usas OBS.</li>
+        </ol>
+      </section>
+    </main>
+
+    <footer class="footer">Manual TTS ApliArte — hecho para streamers hispanos.</footer>
+  </body>
+</html>
