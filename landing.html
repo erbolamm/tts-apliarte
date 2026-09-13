@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TTS ApliArte — Traducción y Voz en Vivo para Twitch</title>
+  <meta name="description" content="Asistente de voz TTS y traducción en tiempo real para directos de Twitch. Código abierto, privacidad local y sin publicidad." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg-scaffold: #1A1A1A;
+      --bg-card: #303030;
+      --appbar-navy: #00467B;
+      --primary-blue: #005FA9;
+      --cyan-active: #5ECEF5;
+      --cyan-glow: rgba(94, 206, 245, 0.25);
+      --text-white: #FDFDFD;
+      --text-muted: #BEBBB9;
+      --border-line: #3D3D3D;
+      --badge-bg: #252525;
+      --success: #4ADE80;
+      --warning: #FBBF24;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-scaffold);
+      color: var(--text-white);
+      font-family: 'Inter', sans-serif;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a {
+      color: var(--cyan-active);
+      text-decoration: none;
+      transition: color 0.2s ease;
+    }
+
+    a:hover {
+      color: var(--text-white);
+      text-decoration: underline;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* ─── 1. Header & Badges ─── */
+    header {
+      background: linear-gradient(135deg, var(--appbar-navy), var(--primary-blue));
+      border-bottom: 2px solid var(--cyan-active);
+      padding: 16px 0;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .nav-wrap {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .logo-box {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 8px;
+      background: var(--primary-blue);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1.5px solid var(--cyan-active);
+      font-weight: 800;
+      font-size: 18px;
+      color: var(--text-white);
+    }
+
+    .logo-title {
+      font-size: 19px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .badges-group {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--cyan-glow);
+      color: var(--text-white);
+    }
+
+    .badge.cyan { border-color: var(--cyan-active); color: var(--cyan-active); }
+    .badge.green { border-color: var(--success); color: var(--success); }
+
+    /* ─── 2. Hero Section ─── */
+    .hero {
+      padding: 72px 0 48px;
+      text-align: center;
+    }
+
+    .hero-pre {
+      display: inline-block;
+      text-transform: uppercase;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      color: var(--cyan-active);
+      margin-bottom: 16px;
+    }
+
+    .hero h1 {
+      font-size: clamp(2.2rem, 5vw, 3.4rem);
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -1px;
+      margin-bottom: 20px;
+      background: linear-gradient(180deg, #FFFFFF 0%, #D4EBF8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-sub {
+      font-size: 18px;
+      color: var(--text-muted);
+      max-width: 680px;
+      margin: 0 auto 32px;
+      line-height: 1.5;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 15px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: none;
+    }
+
+    .btn-primary {
+      background: var(--primary-blue);
+      color: var(--text-white);
+      border: 1px solid var(--cyan-active);
+      box-shadow: 0 0 16px var(--cyan-glow);
+    }
+
+    .btn-primary:hover {
+      background: var(--appbar-navy);
+      box-shadow: 0 0 24px rgba(94, 206, 245, 0.4);
+      text-decoration: none;
+    }
+
+    .btn-secondary {
+      background: var(--bg-card);
+      color: var(--text-white);
+      border: 1px solid var(--border-line);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--cyan-active);
+      text-decoration: none;
+    }
+
+    /* ─── 3. Grid de Beneficios Técnicos ─── */
+    .section-title {
+      font-size: 22px;
+      font-weight: 700;
+      margin: 56px 0 24px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--cyan-active);
+    }
+
+    .grid-6 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 18px;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-line);
+      border-radius: 14px;
+      padding: 22px;
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+
+    .card:hover {
+      border-color: var(--cyan-active);
+      transform: translateY(-2px);
+    }
+
+    .card-icon {
+      font-size: 24px;
+      margin-bottom: 12px;
+    }
+
+    .card h3 {
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: var(--text-white);
+    }
+
+    .card p {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* ─── 4. Paso a Paso (TDAH Friendly) ─── */
+    .steps-list {
+      display: grid;
+      gap: 14px;
+    }
+
+    .step-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border-line);
+      border-radius: 12px;
+      padding: 16px 20px;
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+    }
+
+    .step-num {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--primary-blue);
+      border: 1.5px solid var(--cyan-active);
+      color: var(--text-white);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 15px;
+      flex-shrink: 0;
+    }
+
+    .step-content h4 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .step-content p {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    .faq-box {
+      margin-top: 20px;
+      background: rgba(0, 0, 0, 0.2);
+      border-left: 3px solid var(--cyan-active);
+      padding: 16px 20px;
+      border-radius: 0 10px 10px 0;
+    }
+
+    .faq-box h5 {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--cyan-active);
+      margin-bottom: 6px;
+    }
+
+    .faq-box p {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+
+    .faq-box p:last-child {
+      margin-bottom: 0;
+    }
+
+    /* ─── 5. Comandos One-Liner ─── */
+    .code-terminal {
+      background: #111111;
+      border: 1px solid var(--border-line);
+      border-radius: 12px;
+      padding: 20px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13.5px;
+      margin-bottom: 14px;
+      position: relative;
+    }
+
+    .terminal-head {
+      font-size: 12px;
+      color: var(--cyan-active);
+      font-weight: 700;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .code-line {
+      color: #E2E8F0;
+      display: block;
+      word-break: break-all;
+    }
+
+    /* ─── 6. Apoyo Comunitario & Early Adopters ─── */
+    .support-card {
+      background: linear-gradient(145deg, var(--bg-card), #222222);
+      border: 1px solid var(--cyan-active);
+      border-radius: 16px;
+      padding: 28px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    .support-card h3 {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      color: var(--text-white);
+    }
+
+    .support-card p {
+      color: var(--text-muted);
+      font-size: 14.5px;
+      margin-bottom: 20px;
+    }
+
+    .support-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .support-btn {
+      padding: 10px 18px;
+      border-radius: 8px;
+      background: var(--bg-scaffold);
+      border: 1px solid var(--border-line);
+      color: var(--text-white);
+      font-weight: 600;
+      font-size: 14px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .support-btn:hover {
+      border-color: var(--cyan-active);
+      text-decoration: none;
+      background: #252525;
+    }
+
+    /* ─── 7. Roadmap por Fases ─── */
+    .roadmap-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 12px;
+    }
+
+    .phase-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-line);
+      border-radius: 10px;
+      padding: 16px;
+    }
+
+    .phase-badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 12px;
+      display: inline-block;
+      margin-bottom: 8px;
+    }
+
+    .phase-badge.done { background: rgba(74, 222, 128, 0.2); color: var(--success); }
+    .phase-badge.next { background: rgba(251, 191, 36, 0.2); color: var(--warning); }
+    .phase-badge.plan { background: rgba(190, 187, 185, 0.2); color: var(--text-muted); }
+
+    .phase-card h4 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .phase-card p {
+      font-size: 12.5px;
+      color: var(--text-muted);
+    }
+
+    /* ─── 8. Planes Transparentes ─── */
+    .plans-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+    }
+
+    .plan-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-line);
+      border-radius: 14px;
+      padding: 24px;
+      position: relative;
+    }
+
+    .plan-card.pro {
+      border-color: var(--primary-blue);
+    }
+
+    .plan-tag {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 700;
+      color: var(--cyan-active);
+      margin-bottom: 8px;
+    }
+
+    .plan-card h4 {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .plan-price {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--text-white);
+      margin-bottom: 14px;
+    }
+
+    .plan-card ul {
+      list-style: none;
+      font-size: 13.5px;
+      color: var(--text-muted);
+      margin-bottom: 18px;
+    }
+
+    .plan-card li {
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .plan-status {
+      display: block;
+      text-align: center;
+      padding: 8px;
+      border-radius: 6px;
+      background: #252525;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    /* ─── 9. Nota Personal del Autor Multilingüe ─── */
+    .author-section {
+      background: var(--bg-card);
+      border: 1px solid var(--border-line);
+      border-radius: 14px;
+      padding: 28px;
+      margin-top: 48px;
+    }
+
+    .author-section h3 {
+      font-size: 19px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: var(--text-white);
+    }
+
+    details {
+      background: #252525;
+      border: 1px solid var(--border-line);
+      border-radius: 8px;
+      margin-bottom: 10px;
+      overflow: hidden;
+    }
+
+    summary {
+      padding: 12px 16px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--text-white);
+      user-select: none;
+    }
+
+    summary:hover {
+      background: #2A2A2A;
+      color: var(--cyan-active);
+    }
+
+    details p {
+      padding: 14px 16px;
+      font-size: 13.5px;
+      color: var(--text-muted);
+      line-height: 1.6;
+      border-top: 1px solid var(--border-line);
+    }
+
+    /* ─── 10. Footer & Social ─── */
+    footer {
+      border-top: 1px solid var(--border-line);
+      padding: 40px 0 60px;
+      margin-top: 64px;
+      text-align: center;
+    }
+
+    .share-group {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+
+    .share-btn {
+      padding: 8px 14px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-line);
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .share-btn:hover {
+      color: var(--text-white);
+      border-color: var(--cyan-active);
+      text-decoration: none;
+    }
+
+    .footer-copy {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 1. Header con Badges de Estado y Plataformas -->
+  <header>
+    <div class="container nav-wrap">
+      <div class="logo-box">
+        <div class="logo-icon">A</div>
+        <div class="logo-title">TTS ApliArte</div>
+      </div>
+      <div class="badges-group">
+        <span class="badge cyan">🍎 macOS</span>
+        <span class="badge cyan">🪟 Windows</span>
+        <span class="badge cyan">🐧 Linux</span>
+        <span class="badge cyan">📱 Android</span>
+        <span class="badge green">🆓 Gratis</span>
+        <span class="badge green">🚫 Sin Publicidad</span>
+        <span class="badge">🔒 Privacidad Local</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <!-- 2. Hero con One-Liner Directo -->
+    <section class="hero">
+      <span class="hero-pre">Tu chat en vivo, traducido y hablado al instante</span>
+      <h1>Voz clara y traducción en tiempo real para Twitch.</h1>
+      <p class="hero-sub">
+        Convierte los mensajes del chat en voz natural del sistema, filtra el spam repetitivo y traduce automáticamente para que nunca pierdas el ritmo de tu directo.
+      </p>
+      <div class="hero-actions">
+        <a href="https://github.com/erbolamm/tts-apliarte" class="btn btn-primary" target="_blank" rel="noopener">📦 Ver Repositorio en GitHub</a>
+        <a href="https://www.twitch.tv/apliarte" class="btn btn-secondary" target="_blank" rel="noopener">📺 Canal de Twitch</a>
+      </div>
+    </section>
+
+    <!-- 3. Grid de 6 Beneficios Técnicos (Specs Reales) -->
+    <section>
+      <h2 class="section-title">⚡ Ingeniería y Especificaciones Reales</h2>
+      <div class="grid-6">
+        <div class="card">
+          <div class="card-icon">⚡</div>
+          <h3>IRC Nativo sobre WebSockets</h3>
+          <p>Conexión directa y ligera a los servidores de Twitch Chat (IRC) sin intermediarios lentos ni lag acumulado.</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">🗣️</div>
+          <h3>System TTS Multi-Voz</h3>
+          <p>Uso de los sintetizadores de voz nativos del sistema operativo (`flutter_tts`) sin cuotas por palabra ni consumo de API externa.</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">🛡️</div>
+          <h3>Filtro Anti-Spam & Levenshtein</h3>
+          <p>Detección inteligente de mensajes repetitivos y cadenas duplicadas para proteger tus oídos de bombardeos en el chat.</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">🌐</div>
+          <h3>Traducción en Tiempo Real</h3>
+          <p>Integración con MyMemory API y opciones para servidores de traducción locales o cloud sin vendor-lockin.</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">🎨</div>
+          <h3>Kit de Marca ApliArte Dark</h3>
+          <p>Diseño premium de alto contraste (#1A1A1A / #303030 / #5ECEF5) pensado para no cansar la vista en cabina de streaming.</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">🔒</div>
+          <h3>Zero Data Collection</h3>
+          <p>Tus tokens y configuraciones se guardan 100% en tu máquina local. Ningún servidor externo registra tus conversaciones.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. Cómo funciona Paso a Paso (1 al 6) + Mini FAQ -->
+    <section>
+      <h2 class="section-title">🧭 Cómo Funciona Paso a Paso</h2>
+      <div class="steps-list">
+        <div class="step-item">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h4>Inicia la App</h4>
+            <p>Abre TTS ApliArte en tu ordenador (macOS, Windows o Linux) o dispositivo Android.</p>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h4>Conecta tu Cuenta de Twitch</h4>
+            <p>Pulsa "Login Twitch" para autorizar la lectura de tu chat con el flujo OAuth seguro en tu navegador.</p>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <h4>Selecciona el Idioma y Voz</h4>
+            <p>Elige tu sintetizador preferido, ajusta el volumen, velocidad y tono a tu gusto desde los deslizadores.</p>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <h4>Configura el Filtro de Spam</h4>
+            <p>Activa el límite de caracteres y similitud para silenciar automáticamente usuarios que repiten el mismo mensaje.</p>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">5</div>
+          <div class="step-content">
+            <h4>Modera con Comandos Rápidos</h4>
+            <p>Usa los botones integrados para lanzar <code>/shoutout</code> a los streamers que visitan tu directo o enviar comandos estándar.</p>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">6</div>
+          <div class="step-content">
+            <h4>Disfruta del Directo</h4>
+            <p>Escucha a tu comunidad por los auriculares mientras juegas o programas sin tener que mirar la pantalla del chat todo el tiempo.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="faq-box">
+        <h5>¿Se guardan mis contraseñas o tokens en algún servidor?</h5>
+        <p>No. El token OAuth se conserva exclusivamente en el almacenamiento local seguro de tu aplicación (`shared_preferences`).</p>
+        <h5>¿Puedo usarlo sin cuenta de desarrollador de Twitch?</h5>
+        <p>Sí. La app utiliza el Client ID público de ApliArte con el flujo de autorización estándar para creadores.</p>
+      </div>
+    </section>
+
+    <!-- 5. Descargas con Comandos One-Liner -->
+    <section>
+      <h2 class="section-title">💻 Instalación Rápida por Terminal</h2>
+      
+      <div class="code-terminal">
+        <div class="terminal-head">
+          <span>CLONAR Y EJECUTAR (FLUTTER)</span>
+          <span>MULTI-PLATAFORMA</span>
+        </div>
+        <code class="code-line">git clone https://github.com/erbolamm/tts-apliarte.git && cd tts-apliarte && flutter run</code>
+      </div>
+
+      <div class="code-terminal">
+        <div class="terminal-head">
+          <span>CONSTRUCCIÓN WEB / ESCRITORIO</span>
+          <span>PRODUCCIÓN</span>
+        </div>
+        <code class="code-line">flutter build macos # O usa: flutter build windows / flutter build linux / flutter build web</code>
+      </div>
+    </section>
+
+    <!-- 6. Filosofía de Apoyo Comunitario & Early Adopters -->
+    <section>
+      <div class="support-card">
+        <h3>💖 Apoyo Comunitario & Early Adopters</h3>
+        <p>
+          TTS ApliArte es y seguirá siendo una <strong>herramienta gratuita y de código abierto</strong>. Quien apoya hoy es un <em>early adopter</em>: tendrá canje y reconocimiento futuro en el ecosistema. Sin letra pequeña, de buena fe entre creadores.
+        </p>
+        <div class="support-links">
+          <a href="https://www.paypal.me/erbolamm" class="support-btn" target="_blank" rel="noopener">☕ Invitar a un café (PayPal)</a>
+          <a href="https://ko-fi.com/C0C11TWR1K" class="support-btn" target="_blank" rel="noopener">🍩 Apoyar en Ko-fi</a>
+          <a href="https://streamelements.com/apliarte/tip" class="support-btn" target="_blank" rel="noopener">🌟 StreamElements Tip (Twitch)</a>
+          <a href="https://www.twitch.tv/apliarte" class="support-btn" target="_blank" rel="noopener">💜 Seguir en Twitch</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7. Roadmap por Fases -->
+    <section>
+      <h2 class="section-title">🗺️ Hoja de Ruta (Roadmap)</h2>
+      <div class="roadmap-grid">
+        <div class="phase-card">
+          <span class="phase-badge done">Listo ✅</span>
+          <h4>Fase 0 · Core</h4>
+          <p>Conexión IRC Twitch, TTS nativo y filtros anti-ruido.</p>
+        </div>
+        <div class="phase-card">
+          <span class="phase-badge done">Listo ✅</span>
+          <h4>Fase 1 · Moderación</h4>
+          <p>Botones de comando (/shoutout, !so) y control de volumen.</p>
+        </div>
+        <div class="phase-card">
+          <span class="phase-badge done">Listo ✅</span>
+          <h4>Fase 2 · Kit de Marca</h4>
+          <p>Paleta canónica ApliArte, Drawer lateral y banners de soporte.</p>
+        </div>
+        <div class="phase-card">
+          <span class="phase-badge next">Siguiente 🟡</span>
+          <h4>Fase 3 · Overlay OBS</h4>
+          <p>Servidor local WebSocket para mostrar alertas flotantes en pantalla.</p>
+        </div>
+        <div class="phase-card">
+          <span class="phase-badge plan">Planificado ⬜</span>
+          <h4>Fase 4 · Tiendas</h4>
+          <p>Compilación firmada para Google Play y releases en GitHub.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8. Planes Futuros Transparentes -->
+    <section>
+      <h2 class="section-title">🏷️ Planes Futuros (Transparencia Total)</h2>
+      <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">
+        ⚠️ <strong>Sin pagos por ahora.</strong> Hoy todo es 100% gratuito y de código abierto. Mostramos la previsión únicamente por transparencia con los colaboradores.
+      </p>
+      <div class="plans-grid">
+        <div class="plan-card">
+          <div class="plan-tag">COMUNIDAD</div>
+          <h4>Open Source</h4>
+          <div class="plan-price">0 €</div>
+          <ul>
+            <li>✓ Código fuente libre (MIT)</li>
+            <li>✓ Voz TTS del sistema ilimitada</li>
+            <li>✓ Conexión IRC a tu propio canal</li>
+            <li>✓ Filtros anti-spam locales</li>
+          </ul>
+          <span class="plan-status">Disponible Ahora</span>
+        </div>
+        <div class="plan-card pro">
+          <div class="plan-tag">FUTURO</div>
+          <h4>Creador Pro</h4>
+          <div class="plan-price">Próximamente</div>
+          <ul>
+            <li>✓ Overlays OBS animados en la nube</li>
+            <li>✓ Voces neuronales premium (ElevenLabs/Azure)</li>
+            <li>✓ Análisis de sentimiento en el chat</li>
+            <li>✓ Soporte prioritario</li>
+          </ul>
+          <span class="plan-status">En Desarrollo</span>
+        </div>
+        <div class="plan-card">
+          <div class="plan-tag">EARLY ADOPTER</div>
+          <h4>Vitalicio</h4>
+          <div class="plan-price">Canje Donantes</div>
+          <ul>
+            <li>✓ Para quienes apoyen en Ko-fi / PayPal hoy</li>
+            <li>✓ Acceso a todas las funciones Pro de por vida</li>
+            <li>✓ Mención en los créditos del software</li>
+          </ul>
+          <span class="plan-status">Vía Donación</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 9. Nota Personal del Autor Multilingüe -->
+    <section class="author-section">
+      <h3>💬 Una nota personal del autor / A personal note from the author</h3>
+      <p style="color: var(--text-muted); font-size: 13.5px; margin-bottom: 16px;">
+        ℹ️ <strong>Nota:</strong> Mensaje personal de Javier Mateo escrito en 6 idiomas para creadores de todo el mundo.
+      </p>
+
+      <details open>
+        <summary>🇪🇸 Español</summary>
+        <p>
+          TTS ApliArte es una herramienta hecha en Flutter para streamers de habla hispana. Nació para traducir el chat en vivo, filtrar ruido y leer mensajes con voces claras sin depender de herramientas de pago ni cerradas. Aprendí a programar de forma autodidacta desde el 4 de abril de 2023, y comparto este proyecto para que otros creadores puedan montar su propio flujo de streaming con total libertad.
+        </p>
+      </details>
+
+      <details>
+        <summary>🇬🇧 English</summary>
+        <p>
+          TTS ApliArte is a Flutter tool crafted for streamers. It was created to translate live chat, reduce noise, and speak messages with clear voices without depending on closed or expensive platforms. I learned to code as a self-taught developer starting on April 4, 2023, and I share this project so other creators can build their own streaming workflow freely.
+        </p>
+      </details>
+
+      <details>
+        <summary>🇧🇷 Português</summary>
+        <p>
+          TTS ApliArte é uma ferramenta em Flutter criada para streamers. Foi desenvolvida para traduzir o chat ao vivo, filtrar ruído e ler mensagens com vozes claras sem depender de plataformas fechadas. Aprendi a programar de forma autodidata desde 4 de abril de 2023 e compartilho este projeto para ajudar outros criadores a terem autonomia em suas transmissões.
+        </p>
+      </details>
+
+      <details>
+        <summary>🇫🇷 Français</summary>
+        <p>
+          TTS ApliArte est un outil Flutter conçu pour les streamers. Il sert à traduire le chat en direct, filtrer le bruit et vocaliser les messages sans dépendre de solutions fermées. J'ai appris à programmer en autodidacte depuis le 4 avril 2023, et je partage ce projet pour aider les créateurs à bâtir leur propre régie de stream en toute liberté.
+        </p>
+      </details>
+
+      <details>
+        <summary>🇩🇪 Deutsch</summary>
+        <p>
+          TTS ApliArte ist ein Flutter-Tool für Streamer. Es übersetzt den Live-Chat, filtert Spam und liest Nachrichten mit klaren Stimmen vor, ohne auf geschlossene Plattformen angewiesen zu sein. Ich habe seit dem 4. April 2023 autodidaktisch programmieren gelernt und teile dieses Projekt, damit andere Creator ihren eigenen Stream-Flow aufbauen können.
+        </p>
+      </details>
+
+      <details>
+        <summary>🇮🇹 Italiano</summary>
+        <p>
+          TTS ApliArte è uno strumento Flutter pensato per streamer. Serve a tradurre la chat dal vivo, filtrare il rumore e leggere i messaggi con voci chiare senza piattaforme chiuse. Ho imparato a programmare da autodidatta dal 4 aprile 2023 e condivido questo progetto affinché altri creator possano costruire il proprio flusso liberamente.
+        </p>
+      </details>
+    </section>
+
+    <!-- 10. Botones de Compartir & Footer -->
+    <footer>
+      <div class="share-group">
+        <a href="https://x.com/intent/tweet?text=TTS%20ApliArte%20-%20Traducci%C3%B3n%20y%20Voz%20en%20vivo%20para%20Twitch%20en%20Flutter&url=https://github.com/erbolamm/tts-apliarte" target="_blank" rel="noopener" class="share-btn">Compartir en X</a>
+        <a href="https://t.me/share/url?url=https://github.com/erbolamm/tts-apliarte&text=TTS%20ApliArte%20para%20Streamers" target="_blank" rel="noopener" class="share-btn">Telegram</a>
+        <a href="https://api.whatsapp.com/send?text=Mira%20TTS%20ApliArte:%20https://github.com/erbolamm/tts-apliarte" target="_blank" rel="noopener" class="share-btn">WhatsApp</a>
+        <a href="https://www.linkedin.com/sharing/share-offsite/?url=https://github.com/erbolamm/tts-apliarte" target="_blank" rel="noopener" class="share-btn">LinkedIn</a>
+      </div>
+      <p class="footer-copy">
+        © 2026 ApliArte · MIT License · Hecho con 🧠 desde el 4 de abril de 2023 por Javier Mateo
+      </p>
+    </footer>
+
+  </main>
+
+</body>
+</html>

@@ -97,7 +97,7 @@ Herramienta gratuita y open source. Si te ahorra tiempo, un cafe ayuda a mantene
 | Ko-fi | ko-fi.com/C0C11TWR1K |
 | Twitch Tip | streamelements.com/apliarte/tip |
 
-🌐 Sitio Oficial · 📦 GitHub
+🌐 [Sitio Oficial / Landing](https://erbolamm.github.io/tts-apliarte/landing.html) · 📦 [GitHub](https://github.com/erbolamm/tts-apliarte)
 
 ## Licencia
 MIT — © 2026 ApliArte
