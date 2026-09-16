@@ -55,9 +55,10 @@ class TtsService {
     required String text,
     String? voice,
     String? language,
+    double? pitch,
   }) async {
     _queue.add(
-      _TtsJob(text: text, voice: voice, language: language),
+      _TtsJob(text: text, voice: voice, language: language, pitch: pitch),
     );
     if (!_busy) {
       _processQueue();
@@ -92,6 +93,10 @@ class TtsService {
       await _tts.setVoice(voiceMap);
     }
 
+    // Se fija siempre, incluso al valor por defecto: si no se reinicia aquí,
+    // el pitch de un job anterior se queda pegado en el motor para el siguiente.
+    await _tts.setPitch(job.pitch ?? 1.0);
+
     await _tts.speak(job.text);
   }
 }
@@ -101,9 +106,11 @@ class _TtsJob {
     required this.text,
     required this.voice,
     required this.language,
+    required this.pitch,
   });
 
   final String text;
   final String? voice;
   final String? language;
+  final double? pitch;
 }

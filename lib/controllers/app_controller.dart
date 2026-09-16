@@ -15,6 +15,7 @@ import '../services/twitch_irc_client.dart';
 import '../utils/emote_utils.dart';
 import '../utils/rate_limiter.dart';
 import '../utils/similarity_filter.dart';
+import '../utils/voice_pitch.dart';
 import 'settings_controller.dart';
 
 class AppController extends ChangeNotifier {
@@ -413,10 +414,17 @@ class AppController extends ChangeNotifier {
       finalVoiceName = voice?.name;
     }
 
+    // Sin voz manual (!speak -config), cada usuario recibe un pitch propio
+    // y determinista para no sonar todos con el mismo tono del sistema.
+    final userPitch = userSpecificLocale == null
+        ? pitchForUsername(message.username)
+        : null;
+
     await _tts.enqueue(
       text: text,
       voice: finalVoiceName,
       language: language == 'auto' ? null : language,
+      pitch: userPitch,
     );
   }
 
