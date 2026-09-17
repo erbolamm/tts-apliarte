@@ -51,7 +51,7 @@ class _StreamDeckCardState extends State<StreamDeckCard> {
         ctrl.setStreamScene(id);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('🎬 Escena cambiada en OBS: \$label'),
+            content: Text('🎬 Escena cambiada en OBS: $label'),
             duration: const Duration(seconds: 1),
           ),
         );
@@ -133,73 +133,65 @@ class _StreamDeckCardState extends State<StreamDeckCard> {
             ],
           ),
           const SizedBox(height: 16),
-          // Scroll horizontal para los inputs
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 220,
-                  child: TextField(
-                    controller: _subtitleCtrl,
-                    decoration: InputDecoration(
-                      labelText: 'Subtítulo',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          // Disposición responsiva Wrap para los inputs (sin scroll horizontal)
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              SizedBox(
+                width: 220,
+                child: TextField(
+                  controller: _subtitleCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Subtítulo',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                   ),
                 ),
-                const SizedBox(width: 12),
-                SizedBox(
-                  width: 220,
-                  child: TextField(
-                    controller: _poweredCtrl,
-                    decoration: InputDecoration(
-                      labelText: 'Powered By',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              ),
+              SizedBox(
+                width: 220,
+                child: TextField(
+                  controller: _poweredCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Powered By',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                   ),
                 ),
-                const SizedBox(width: 12),
-                SizedBox(
-                  width: 100,
-                  child: TextField(
-                    controller: _timerCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: 'Minutos',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              ),
+              SizedBox(
+                width: 100,
+                child: TextField(
+                  controller: _timerCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: 'Minutos',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
           const SizedBox(height: 20),
-          // Scroll horizontal para los botones
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _buildSceneBtn(ctrl, 'scene-start', 'INICIO', Icons.timer, Colors.orange),
-                const SizedBox(width: 12),
-                _buildSceneBtn(ctrl, 'scene-chat', 'CHARLA', Icons.chat_bubble, Colors.blue),
-                const SizedBox(width: 12),
-                _buildSceneBtn(ctrl, 'scene-game', 'JUEGO', Icons.videogame_asset, Colors.green),
-                const SizedBox(width: 12),
-                _buildSceneBtn(ctrl, 'scene-brb', 'PAUSA (BRB)', Icons.coffee, Colors.redAccent),
-                const SizedBox(width: 12),
-                _buildSceneBtn(ctrl, 'scene-dev', 'DEV', Icons.code, Colors.purpleAccent),
-              ],
-            ),
+          // Disposición responsiva Wrap para los botones (sin scroll horizontal)
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              _buildSceneBtn(ctrl, 'scene-start', 'INICIO', Icons.timer, Colors.orange),
+              _buildSceneBtn(ctrl, 'scene-chat', 'CHARLA', Icons.chat_bubble, Colors.blue),
+              _buildSceneBtn(ctrl, 'scene-game', 'JUEGO', Icons.videogame_asset, Colors.green),
+              _buildSceneBtn(ctrl, 'scene-brb', 'PAUSA (BRB)', Icons.coffee, Colors.redAccent),
+              _buildSceneBtn(ctrl, 'scene-dev', 'DEV', Icons.code, Colors.purpleAccent),
+            ],
           ),
         ],
       ),

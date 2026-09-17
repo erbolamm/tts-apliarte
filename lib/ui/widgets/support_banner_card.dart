@@ -74,6 +74,14 @@ class SupportBannerCard extends StatelessWidget {
                     backgroundColor: const Color(0xFF2B2B36),
                   ),
                 ),
+                FilledButton.tonalIcon(
+                  onPressed: () => _launch('https://github.com/sponsors/erbolamm'),
+                  icon: const Icon(Icons.volunteer_activism_rounded, size: 18, color: Color(0xFF8B98A5)),
+                  label: const Text('GitHub Sponsors'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF2B2B36),
+                  ),
+                ),
               ],
             ),
           ],

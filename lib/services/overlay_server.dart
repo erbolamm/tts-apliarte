@@ -20,6 +20,11 @@ class OverlayServer {
   Future<void> Function()? onConnect;
   Future<void> Function()? onDisconnect;
 
+  /// Envía un mensaje literal al chat de Twitch ya conectado (paso 7 de la
+  /// cadena directo/tts-apliarte: el panel de la Oficina llama aquí en vez
+  /// de copiar al portapapeles). Devuelve true si se envió.
+  Future<bool> Function(String mensaje)? onEnviarMensaje;
+
   /// Estado de visibilidad de cada capa del directo.
   /// true = visible, false = oculto
   final Map<String, bool> _scenes = {
@@ -149,6 +154,15 @@ class OverlayServer {
 
       final path = req.uri.path;
 
+      // Preflight CORS: el panel de la Oficina llama desde otro origen con
+      // POST + JSON, así que el navegador manda OPTIONS antes.
+      if (req.method == 'OPTIONS') {
+        req.response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        req.response.statusCode = HttpStatus.noContent;
+        await req.response.close();
+        return;
+      }
+
       // WebSocket para el overlay y el panel de control
       if (path == '/ws' && WebSocketTransformer.isUpgradeRequest(req)) {
         final ws = await WebSocketTransformer.upgrade(req);
@@ -187,6 +201,30 @@ class OverlayServer {
         if (action == 'disconnect') await onDisconnect?.call();
         req.response.headers.contentType = ContentType.json;
         req.response.write(jsonEncode({'ok': true}));
+        await req.response.close();
+        return;
+      }
+
+      // Envío directo al chat desde el panel de la Oficina (paso 7).
+      if (path == '/api/enviar' && req.method == 'POST') {
+        req.response.headers.contentType = ContentType.json;
+        try {
+          final crudo = await utf8.decoder.bind(req).join();
+          final cuerpo = crudo.isEmpty ? const {} : jsonDecode(crudo) as Map<String, dynamic>;
+          final mensaje = (cuerpo['mensaje'] as String? ?? '').trim();
+          if (mensaje.isEmpty) {
+            req.response.statusCode = HttpStatus.badRequest;
+            req.response.write(jsonEncode({'ok': false, 'error': 'mensaje vacío'}));
+            await req.response.close();
+            return;
+          }
+          final enviado = await onEnviarMensaje?.call(mensaje) ?? false;
+          req.response.statusCode = enviado ? HttpStatus.ok : HttpStatus.serviceUnavailable;
+          req.response.write(jsonEncode({'ok': enviado}));
+        } catch (e) {
+          req.response.statusCode = HttpStatus.badRequest;
+          req.response.write(jsonEncode({'ok': false, 'error': 'petición inválida'}));
+        }
         await req.response.close();
         return;
       }

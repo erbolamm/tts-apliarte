@@ -6,7 +6,10 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../controllers/app_controller.dart';
 import '../../controllers/settings_controller.dart';
 import '../../utils/app_strings.dart';
+import '../chat_screen.dart';
+import '../home_screen.dart';
 import '../settings/advanced_settings_screens.dart';
+import 'command_buttons_card.dart';
 
 /// Drawer canónico para el ecosistema ApliArte.
 ///
@@ -111,11 +114,14 @@ class ApliArteDrawer extends StatelessWidget {
                       ),
                       if (settings.twitchChannel.isNotEmpty) ...[
                         const SizedBox(width: 8),
-                        Text(
-                          '#${settings.twitchChannel}',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: cActiveCyan,
-                            fontWeight: FontWeight.bold,
+                        Flexible(
+                          child: Text(
+                            '#${settings.twitchChannel}',
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: cActiveCyan,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ],
@@ -138,6 +144,56 @@ class ApliArteDrawer extends StatelessWidget {
                     selected: true,
                     selectedColor: cActiveCyan,
                     onTap: () => Navigator.pop(context),
+                  ),
+
+                  // Sub-Drawer de Twitch (paso 9): agrupa las subpartes que ya
+                  // existen tras los pasos 5-8. «Comandos, usuarios y
+                  // canales» no es una pantalla aparte — vive en la Consola
+                  // Principal, así que aquí solo cierra el Drawer y desplaza
+                  // hasta esa tarjeta.
+                  ExpansionTile(
+                    leading: const Icon(Icons.live_tv_rounded, color: cActiveCyan),
+                    title: const Text('Twitch'),
+                    childrenPadding: const EdgeInsets.only(left: 8),
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.chat_bubble_rounded, color: Colors.white70),
+                        title: const Text('Chat en vivo'),
+                        subtitle: const Text(
+                          'Popout embebido de Twitch',
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                        ),
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const ChatScreen()),
+                          );
+                        },
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.forum_rounded, color: Colors.white70),
+                        title: const Text('Comandos, usuarios y canales'),
+                        subtitle: const Text(
+                          'Botonera de la Consola Principal',
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                        ),
+                        onTap: () {
+                          Navigator.pop(context);
+                          HomeScreen.railIndexNotifier.value = 3;
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            final ctx = comandosUsuariosCanalesKey.currentContext;
+                            if (ctx != null) {
+                              Scrollable.ensureVisible(
+                                ctx,
+                                duration: const Duration(milliseconds: 400),
+                                curve: Curves.easeInOut,
+                              );
+                            }
+                          });
+                        },
+                      ),
+                    ],
                   ),
 
                   const Divider(height: 16),
@@ -191,6 +247,43 @@ class ApliArteDrawer extends StatelessWidget {
                         context,
                         MaterialPageRoute(
                           builder: (_) => const SystemVoicesConfigScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.dvr_rounded, color: Colors.white70),
+                    title: const Text('Servidor de escenas'),
+                    subtitle: const Text(
+                      'Conecta tu propio servidor local',
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const ScenesServerConfigScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  ListTile(
+                    leading: Icon(
+                      Icons.cable_rounded,
+                      color: appController.obsConectado ? const Color(0xFF4CAF50) : Colors.white70,
+                    ),
+                    title: const Text('Conexión con OBS'),
+                    subtitle: Text(
+                      appController.obsConectado ? 'Conectado' : 'Sin conectar',
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const ObsConnectionConfigScreen(),
                         ),
                       );
                     },
@@ -274,6 +367,19 @@ class ApliArteDrawer extends StatelessWidget {
                     trailing: const Icon(Icons.open_in_new_rounded, size: 16),
                     onTap: () => launchUrl(
                       Uri.parse('https://streamelements.com/apliarte/tip'),
+                      mode: LaunchMode.externalApplication,
+                    ),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.volunteer_activism_rounded, color: Color(0xFF8B98A5)),
+                    title: const Text('GitHub Sponsors'),
+                    subtitle: const Text(
+                      'github.com/sponsors/erbolamm',
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                    trailing: const Icon(Icons.open_in_new_rounded, size: 16),
+                    onTap: () => launchUrl(
+                      Uri.parse('https://github.com/sponsors/erbolamm'),
                       mode: LaunchMode.externalApplication,
                     ),
                   ),

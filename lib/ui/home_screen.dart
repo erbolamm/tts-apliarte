@@ -10,7 +10,7 @@ import '../utils/app_strings.dart';
 import 'settings/advanced_settings_screens.dart';
 import 'widgets/apliarte_drawer.dart';
 import 'widgets/command_buttons_card.dart';
-import 'widgets/layers_manager_card.dart';
+import 'widgets/obs_scenes_card.dart';
 import 'widgets/section_card.dart';
 import 'widgets/settings_field.dart';
 import 'widgets/status_pill.dart';
@@ -20,20 +20,34 @@ import 'widgets/support_banner_card.dart';
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
+  static final ValueNotifier<int> railIndexNotifier = ValueNotifier<int>(0);
+
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
   final _testController = TextEditingController();
+  int _selectedRailIndex = 0;
 
   @override
   void initState() {
     super.initState();
+    _selectedRailIndex = HomeScreen.railIndexNotifier.value;
+    HomeScreen.railIndexNotifier.addListener(_onRailIndexChanged);
+  }
+
+  void _onRailIndexChanged() {
+    if (mounted && _selectedRailIndex != HomeScreen.railIndexNotifier.value) {
+      setState(() {
+        _selectedRailIndex = HomeScreen.railIndexNotifier.value;
+      });
+    }
   }
 
   @override
   void dispose() {
+    HomeScreen.railIndexNotifier.removeListener(_onRailIndexChanged);
     _testController.dispose();
     super.dispose();
   }
@@ -43,6 +57,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final settingsController = context.watch<SettingsController>();
     final appController = context.watch<AppController>();
     final settings = settingsController.settings;
+    final s = AppStrings(settings.uiLanguage);
 
     return Scaffold(
       drawer: const ApliArteDrawer(),
@@ -92,154 +107,180 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: Column(
-        children: [
-          // ── Controles scrollables debajo ─────────────────────────────────
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final isWide = constraints.maxWidth > 1200;
-                final sections = _buildSections(
-                  context,
-                  settings,
-                  appController,
-                );
-                final logs = _buildLogs(appController, settings.uiLanguage);
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isWide = constraints.maxWidth > 1200;
+          final logs = _buildLogs(appController, settings.uiLanguage);
 
-                if (isWide) {
-                  return Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          flex: 3,
-                          child: ListView.separated(
-                            itemCount: sections.length,
-                            separatorBuilder: (context, index) =>
-                                const SizedBox(height: 16),
-                            itemBuilder: (context, index) => sections[index],
-                          ),
-                        ),
-                        const SizedBox(width: 20),
-                        Expanded(flex: 2, child: logs),
-                      ],
+          // Vista activa del rail:
+          // 0: 🎬 Escenas (OBS WebSocket + Stream Deck)
+          // 1: 🎙️ Micrófono / Dictado
+          // 2: 🌐 URL OBS (Browser Source)
+          // 3: ⚡ Comandos (CommandButtonsCard)
+          Widget activeContent;
+          switch (_selectedRailIndex) {
+            case 0:
+              activeContent = Column(
+                children: [
+                  ObsScenesCard(appController: appController),
+                  const SizedBox(height: 16),
+                  const StreamDeckCard(),
+                ],
+              );
+              break;
+            case 1:
+              activeContent = _DictationCard(
+                appController: appController,
+                settings: settings,
+                s: s,
+                onUpdateSettings: (update) =>
+                    _updateSettings(context, update),
+              );
+              break;
+            case 2:
+              activeContent = _ObsBrowserSourceCard(
+                appController: appController,
+              );
+              break;
+            case 3:
+            default:
+              activeContent = const CommandButtonsCard();
+              break;
+          }
+
+          return Row(
+            children: [
+              // ── Rail lateral de navegación ──────────────────────────────
+              NavigationRail(
+                selectedIndex: _selectedRailIndex,
+                onDestinationSelected: (index) {
+                  setState(() => _selectedRailIndex = index);
+                  HomeScreen.railIndexNotifier.value = index;
+                },
+                labelType: NavigationRailLabelType.all,
+                destinations: const [
+                  NavigationRailDestination(
+                    icon: Icon(Icons.movie_outlined),
+                    selectedIcon: Icon(Icons.movie),
+                    label: Text('Escenas'),
+                  ),
+                  NavigationRailDestination(
+                    icon: Icon(Icons.mic_none),
+                    selectedIcon: Icon(Icons.mic),
+                    label: Text('Dictado'),
+                  ),
+                  NavigationRailDestination(
+                    icon: Icon(Icons.language_outlined),
+                    selectedIcon: Icon(Icons.language),
+                    label: Text('URL OBS'),
+                  ),
+                  NavigationRailDestination(
+                    icon: Icon(Icons.bolt_outlined),
+                    selectedIcon: Icon(Icons.bolt),
+                    label: Text('Comandos'),
+                  ),
+                ],
+              ),
+              const VerticalDivider(thickness: 1, width: 1),
+
+              // ── Contenido central ───────────────────────────────────────
+              Expanded(
+                flex: 3,
+                child: ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    // ── Conexión y apoyo: fijos siempre visibles arriba ──
+                    _ConnectionCard(
+                      appController: appController,
+                      settings: settings,
+                      s: s,
+                      onUpdateSettings: (update) =>
+                          _updateSettings(context, update),
                     ),
-                  );
-                }
+                    const SizedBox(height: 12),
+                    const SupportBannerCard(),
+                    const SizedBox(height: 16),
 
-                return ListView(
-                  padding: const EdgeInsets.all(20),
-                  children: [...sections, const SizedBox(height: 16), logs],
-                );
-              },
-            ),
-          ),
-        ],
+                    // ── Vista activa del rail ────────────────────────────
+                    activeContent,
+
+                    // ── Accesos directos a configuración ─────────────────
+                    const SizedBox(height: 24),
+                    _buildNavButtons(context),
+
+                    if (!isWide) ...[
+                      const SizedBox(height: 16),
+                      logs,
+                    ],
+                  ],
+                ),
+              ),
+
+              if (isWide) ...[
+                const SizedBox(width: 16),
+                Expanded(
+                  flex: 2,
+                  child: Padding(
+                    padding: const EdgeInsets.only(
+                      top: 16,
+                      bottom: 16,
+                      right: 16,
+                    ),
+                    child: logs,
+                  ),
+                ),
+              ],
+            ],
+          );
+        },
       ),
     );
   }
 
-  List<Widget> _buildSections(
-    BuildContext context,
-    AppSettings settings,
-    AppController appController,
-  ) {
-    final s = AppStrings(settings.uiLanguage);
-    return [
-      // ── Estado de conexión (siempre visible, lo primero) ──────────────────
-      _ConnectionCard(
-        appController: appController,
-        settings: settings,
-        s: s,
-        onUpdateSettings: (update) => _updateSettings(context, update),
-      ),
-      if (appController.isOverlayActive)
-        SectionCard(
-          title: 'URL para OBS (Browser Source) 1920x1080',
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  appController.overlayUrl,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blueAccent,
-                      ),
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.copy),
-                tooltip: 'Copiar enlace',
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(text: appController.overlayUrl));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('URL copiada al portapapeles. Pégala en un Navegador origen en OBS.')),
-                  );
-                },
-              ),
-              IconButton(
-                icon: const Icon(Icons.settings_remote),
-                tooltip: 'Copiar enlace Control Móvil',
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(text: appController.controlUrl));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('URL de control copiada. Ábrela en tu móvil para manejar el directo.')),
-                  );
-                },
-              ),
-            ],
+  Widget _buildNavButtons(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        children: [
+          _buildNavButton(
+            context,
+            icon: Icons.record_voice_over,
+            color: const Color(0xFF5ECEF5), // Cian activo ApliArte
+            title: 'Traducción y TTS',
+            subtitle: 'Ajustes automáticos e idiomas',
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const TranslationConfigScreen()),
+            ),
           ),
-        ),
-        const StreamDeckCard(),
-        LayersManagerCard(appController: appController),
-        const CommandButtonsCard(),
-        const SupportBannerCard(),
-      // ── Secciones con botones de Navigator ──
-      const SizedBox(height: 16),
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Column(
-          children: [
-            _buildNavButton(
+          const SizedBox(height: 12),
+          _buildNavButton(
+            context,
+            icon: Icons.shield,
+            color: const Color(0xFF005FA9), // Azul primario ApliArte
+            title: 'Filtros y Moderación',
+            subtitle: 'Antispam, similitud y baneos',
+            onTap: () => Navigator.push(
               context,
-              icon: Icons.record_voice_over,
-              color: const Color(0xFF5ECEF5), // Cian activo ApliArte
-              title: 'Traducción y TTS',
-              subtitle: 'Ajustes automáticos e idiomas',
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const TranslationConfigScreen()),
-              ),
+              MaterialPageRoute(builder: (_) => const FiltersConfigScreen()),
             ),
-            const SizedBox(height: 12),
-            _buildNavButton(
+          ),
+          const SizedBox(height: 12),
+          _buildNavButton(
+            context,
+            icon: Icons.multitrack_audio,
+            color: const Color(0xFF5ECEF5), // Cian activo ApliArte
+            title: 'Voces de Sistema',
+            subtitle: 'Configurar y probar voces TTS',
+            onTap: () => Navigator.push(
               context,
-              icon: Icons.shield,
-              color: const Color(0xFF005FA9), // Azul primario ApliArte
-              title: 'Filtros y Moderación',
-              subtitle: 'Antispam, similitud y baneos',
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const FiltersConfigScreen()),
-              ),
+              MaterialPageRoute(builder: (_) => const SystemVoicesConfigScreen()),
             ),
-            const SizedBox(height: 12),
-            _buildNavButton(
-              context,
-              icon: Icons.multitrack_audio,
-              color: const Color(0xFF5ECEF5), // Cian activo ApliArte
-              title: 'Voces de Sistema',
-              subtitle: 'Configurar y probar voces TTS',
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const SystemVoicesConfigScreen()),
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
+          ),
+          const SizedBox(height: 16),
+        ],
       ),
-    ];
+    );
   }
 
   Widget _buildNavButton(
@@ -339,6 +380,196 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
+// ─── Vista de Micrófono y Dictado por Voz ─────────────────────────────────
+
+class _DictationCard extends StatelessWidget {
+  const _DictationCard({
+    required this.appController,
+    required this.settings,
+    required this.s,
+    required this.onUpdateSettings,
+  });
+
+  final AppController appController;
+  final AppSettings settings;
+  final AppStrings s;
+  final void Function(AppSettings Function(AppSettings)) onUpdateSettings;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isListening = appController.isSpeechListening;
+
+    return SectionCard(
+      title: '🎙️ Micrófono y Dictado por Voz',
+      initiallyExpanded: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isListening
+                      ? Colors.redAccent.withValues(alpha: 0.2)
+                      : Colors.blueAccent.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isListening ? Icons.mic : Icons.mic_none,
+                  color: isListening ? Colors.redAccent : Colors.blueAccent,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isListening
+                          ? 'Escuchando voz en directo…'
+                          : 'Micrófono en reposo',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: isListening ? Colors.redAccent : null,
+                      ),
+                    ),
+                    Text(
+                      settings.useSpeechToText
+                          ? (settings.sendDictationToChannel
+                              ? 'El dictado se enviará al chat de Twitch'
+                              : 'Reconocimiento activo para traducción/TTS local')
+                          : 'Reconocimiento desactivado en opciones',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: Colors.grey.shade400,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: isListening
+                      ? Colors.redAccent
+                      : const Color(0xFF005FA9),
+                ),
+                onPressed: () {
+                  if (isListening) {
+                    appController.stopSpeech();
+                  } else {
+                    appController.startSpeech();
+                  }
+                },
+                icon: Icon(isListening ? Icons.stop : Icons.mic),
+                label: Text(isListening ? 'Detener' : 'Escuchar'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Divider(),
+          SwitchListTile(
+            title: Text(s.useSpeech),
+            subtitle:
+                const Text('Activa el motor de reconocimiento por voz'),
+            value: settings.useSpeechToText,
+            onChanged: (value) => onUpdateSettings(
+              (current) => current.copyWith(useSpeechToText: value),
+            ),
+          ),
+          SwitchListTile(
+            title: Text(s.sendDictation),
+            subtitle: const Text(
+                'Envía las frases reconocidas directamente al chat'),
+            value: settings.sendDictationToChannel,
+            onChanged: settings.useSpeechToText
+                ? (value) => onUpdateSettings(
+                      (current) =>
+                          current.copyWith(sendDictationToChannel: value),
+                    )
+                : null,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Vista de URL para OBS (Browser Source) ───────────────────────────────
+
+class _ObsBrowserSourceCard extends StatelessWidget {
+  const _ObsBrowserSourceCard({
+    required this.appController,
+  });
+
+  final AppController appController;
+
+  @override
+  Widget build(BuildContext context) {
+    return SectionCard(
+      title: '🌐 URL para OBS (Browser Source) 1920x1080',
+      initiallyExpanded: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Añade una fuente de tipo "Navegador" en OBS Studio con resolución 1920x1080 y pega la siguiente URL:',
+            style: TextStyle(fontSize: 13, color: Colors.grey),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+            ),
+            child: SelectableText(
+              appController.overlayUrl,
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blueAccent,
+                  ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              FilledButton.icon(
+                icon: const Icon(Icons.copy, size: 18),
+                label: const Text('Copiar enlace Overlay'),
+                onPressed: () {
+                  Clipboard.setData(
+                      ClipboardData(text: appController.overlayUrl));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text(
+                            'URL de overlay copiada al portapapeles.')),
+                  );
+                },
+              ),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.settings_remote, size: 18),
+                label: const Text('Copiar Control Móvil'),
+                onPressed: () {
+                  Clipboard.setData(
+                      ClipboardData(text: appController.controlUrl));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('URL de control móvil copiada.')),
+                  );
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 // ─── Tarjeta de conexión inteligente (3 estados) ──────────────────────────
 

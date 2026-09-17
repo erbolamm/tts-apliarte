@@ -5,8 +5,10 @@ import '../../controllers/app_controller.dart';
 import '../../controllers/settings_controller.dart';
 import '../../models/app_settings.dart';
 import '../../utils/app_strings.dart';
+import '../../utils/obs_qr_parser.dart';
 import '../widgets/section_card.dart';
 import '../widgets/settings_field.dart';
+import 'obs_qr_scanner_screen.dart';
 
 class _LanguageOption {
   const _LanguageOption(this.code, this.label);
@@ -544,6 +546,139 @@ class _SystemVoicesConfigScreenState extends State<SystemVoicesConfigScreen> {
                       child: Text(s.stopTts),
                     ),
                   ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Configura la URL del servidor propio de escenas (paso 4/5 de la cadena
+/// directo/tts-apliarte). Sin valor por defecto: la app publicada no debe
+/// apuntar a la infraestructura de Javier.
+class ScenesServerConfigScreen extends StatelessWidget {
+  const ScenesServerConfigScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = context.watch<SettingsController>().settings;
+    final s = AppStrings(settings.uiLanguage);
+
+    return Scaffold(
+      appBar: AppBar(title: Text('🎬 ${s.scenesServerTitle}')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          SectionCard(
+            title: s.scenesServerTitle,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SettingsTextField(
+                  label: s.scenesServerUrlLabel,
+                  hint: s.scenesServerUrlHint,
+                  value: settings.scenesServerBaseUrl,
+                  keyboardType: TextInputType.url,
+                  onChanged: (value) => _updateSettings(
+                    context,
+                    (current) => current.copyWith(scenesServerBaseUrl: value),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  s.scenesServerHelp,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.grey.shade400,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Conexión al WebSocket nativo de OBS Studio (obs-websocket v5, puerto 4455
+/// por defecto). Distinto del "Servidor de escenas" de arriba. Sin valor por
+/// defecto: la app publicada no debe apuntar a la infraestructura de nadie.
+class ObsConnectionConfigScreen extends StatelessWidget {
+  const ObsConnectionConfigScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = context.watch<SettingsController>().settings;
+    final s = AppStrings(settings.uiLanguage);
+
+    return Scaffold(
+      appBar: AppBar(title: Text('🔌 ${s.obsWebSocketTitle}')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          SectionCard(
+            title: s.obsWebSocketTitle,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                FilledButton.icon(
+                  icon: const Icon(Icons.qr_code_scanner_rounded),
+                  label: const Text('Escanear QR de OBS'),
+                  onPressed: () async {
+                    final datos = await Navigator.push<ObsQrDatos>(
+                      context,
+                      MaterialPageRoute(builder: (_) => const ObsQrScannerScreen()),
+                    );
+                    if (datos == null || !context.mounted) return;
+                    _updateSettings(
+                      context,
+                      (current) => current.copyWith(
+                        obsWebSocketHost: datos.host,
+                        obsWebSocketPort: datos.port,
+                        obsWebSocketPassword: datos.password,
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+                SettingsTextField(
+                  label: s.obsWebSocketHostLabel,
+                  hint: s.obsWebSocketHostHint,
+                  value: settings.obsWebSocketHost,
+                  keyboardType: TextInputType.url,
+                  onChanged: (value) => _updateSettings(
+                    context,
+                    (current) => current.copyWith(obsWebSocketHost: value.trim()),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SettingsNumberField(
+                  label: s.obsWebSocketPortLabel,
+                  value: settings.obsWebSocketPort,
+                  onChanged: (value) => _updateSettings(
+                    context,
+                    (current) => current.copyWith(obsWebSocketPort: value.toInt()),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SettingsTextField(
+                  label: s.obsWebSocketPasswordLabel,
+                  value: settings.obsWebSocketPassword,
+                  obscureText: true,
+                  onChanged: (value) => _updateSettings(
+                    context,
+                    (current) => current.copyWith(obsWebSocketPassword: value),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  s.obsWebSocketHelp,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.grey.shade400,
+                      ),
                 ),
               ],
             ),

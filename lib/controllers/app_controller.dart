@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 import '../models/app_settings.dart';
 import '../models/log_entry.dart';
 import '../models/twitch_message.dart';
+import '../services/escena_server_client.dart';
+import '../services/obs_websocket_client.dart';
 import '../services/overlay_server.dart';
 import '../services/speech_service.dart';
 import '../services/translation_service.dart';
@@ -36,6 +38,59 @@ class AppController extends ChangeNotifier {
 
   final OverlayServer _overlayServer = OverlayServer();
   bool _authLoading = false;
+
+  ObsWebSocketClient? _obsClient;
+  String _obsConectadoA = '';
+  bool _obsConectado = false;
+  List<ObsScene> _obsEscenas = [];
+
+  /// true solo si hay una conexión real y autenticada con OBS ahora mismo.
+  /// La UI debe ocultar la sección de escenas si esto es false — nunca
+  /// mostrar un error ni una lista vacía como si fuera real.
+  bool get obsConectado => _obsConectado;
+  List<ObsScene> get obsEscenas => List.unmodifiable(_obsEscenas);
+
+  Future<void> _conectarObsSiHaceFalta() async {
+    final host = settings.obsWebSocketHost;
+    final clave = '$host:${settings.obsWebSocketPort}:${settings.obsWebSocketPassword}';
+    if (host.isEmpty) {
+      if (_obsClient != null) {
+        await _obsClient!.desconectar();
+        _obsClient = null;
+      }
+      _obsConectadoA = '';
+      _obsConectado = false;
+      _obsEscenas = [];
+      notifyListeners();
+      return;
+    }
+    if (clave == _obsConectadoA && _obsConectado) {
+      return;
+    }
+    await _obsClient?.desconectar();
+    final cliente = ObsWebSocketClient(
+      host: host,
+      port: settings.obsWebSocketPort,
+      password: settings.obsWebSocketPassword,
+    );
+    _obsClient = cliente;
+    _obsConectadoA = clave;
+    final ok = await cliente.conectar();
+    _obsConectado = ok;
+    _obsEscenas = ok ? await cliente.obtenerEscenas() : [];
+    notifyListeners();
+  }
+
+  /// Reintenta la conexión a OBS a mano (botón de refrescar en la UI).
+  Future<void> reconectarObs() => _conectarObsSiHaceFalta();
+
+  /// Cambia la escena activa en OBS. No hace nada si no hay conexión.
+  Future<void> cambiarEscenaObs(String nombre) async {
+    if (!_obsConectado || _obsClient == null) return;
+    await _obsClient!.cambiarEscena(nombre);
+    _obsEscenas = await _obsClient!.obtenerEscenas();
+    notifyListeners();
+  }
 
   final SimilarityFilter _userSimilarity = SimilarityFilter();
   final SimilarityFilter _globalSimilarity = SimilarityFilter();
@@ -72,6 +127,20 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Lee la escena activa del servidor propio de `directo/` (paso 4 de la
+  /// cadena directo/tts-apliarte). Devuelve null si `scenesServerBaseUrl` no
+  /// está configurada o el servidor no responde — nunca lanza.
+  Future<Map<String, dynamic>?> fetchEscenaDelDirecto() {
+    return EscenaServerClient(settings.scenesServerBaseUrl).obtenerEscenaActual();
+  }
+
+  /// Cambia la escena activa en el servidor propio de `directo/`. Devuelve
+  /// false, sin lanzar, si `scenesServerBaseUrl` no está configurada o la
+  /// llamada falla.
+  Future<bool> cambiarEscenaDelDirecto(String escena) {
+    return EscenaServerClient(settings.scenesServerBaseUrl).cambiarEscena(escena);
+  }
+
   void updateStreamInfo(String subtitle, String poweredBy) {
     _overlayServer.updateStreamInfo(subtitle, poweredBy);
     notifyListeners(); // Para actualizar la UI si lo mostramos
@@ -86,6 +155,11 @@ class AppController extends ChangeNotifier {
     await _tts.init();
     _overlayServer.onConnect = () => connect();
     _overlayServer.onDisconnect = () => disconnect();
+    _overlayServer.onEnviarMensaje = (mensaje) async {
+      if (!_connected) return false;
+      await sendChatMessage(mensaje);
+      return true;
+    };
     _overlayServer.updateCustomLayers(settings.customLayers);
     await _overlayServer.start();
     _twitch.states.listen(_handleConnectionState);
@@ -93,6 +167,7 @@ class AppController extends ChangeNotifier {
     await _loadVoices();
     _initialized = true;
     notifyListeners();
+    unawaited(_conectarObsSiHaceFalta());
   }
 
   void attachSettings(SettingsController controller) {
@@ -398,17 +473,33 @@ class AppController extends ChangeNotifier {
     String? finalVoiceName;
     if (userSpecificLocale != null) {
       final normalizedTarget = userSpecificLocale.toLowerCase().replaceAll('_', '-');
-      final matchingVoices = _voices.where((v) {
+      var matchingVoices = _voices.where((v) {
         final loc = v.locale.toLowerCase().replaceAll('_', '-');
         return loc == normalizedTarget;
       }).toList();
-      
+
+      // Muchos móviles no traen instalado un acento por país concreto (es-VE, es-CU...):
+      // solo tienen dos o tres variantes de español. Sin este segundo intento, un
+      // !speak -config a un país no instalado se queda sin voz asignada y suena
+      // igual que el resto, aunque el comando "funcionara" sin avisar de nada.
+      if (matchingVoices.isEmpty) {
+        final idioma = normalizedTarget.split('-').first;
+        matchingVoices = _voices.where((v) {
+          final loc = v.locale.toLowerCase().replaceAll('_', '-');
+          return loc.split('-').first == idioma;
+        }).toList();
+      }
+
       if (matchingVoices.isNotEmpty) {
         int idx = userSpecificIndex - 1;
         if (idx < 0 || idx >= matchingVoices.length) {
           idx = 0;
         }
         finalVoiceName = matchingVoices[idx].name;
+      } else {
+        // Ni el país ni el idioma existen entre las voces instaladas: mejor la voz
+        // por defecto que null, que en algunos motores no cambia nada perceptible.
+        finalVoiceName = voice?.name;
       }
     } else {
       finalVoiceName = voice?.name;
@@ -568,6 +659,7 @@ class AppController extends ChangeNotifier {
     } else if (!settings.useSpeechToText && _speech.isListening) {
       stopSpeech();
     }
+    unawaited(_conectarObsSiHaceFalta());
     notifyListeners();
   }
 
@@ -630,6 +722,7 @@ class AppController extends ChangeNotifier {
     _speech.dispose();
     _tts.stop();
     _overlayServer.stop();
+    _obsClient?.desconectar();
     super.dispose();
   }
 }

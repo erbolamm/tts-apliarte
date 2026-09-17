@@ -37,12 +37,18 @@ class AppSettings {
     required this.systemLanguage,
     required this.systemVoice,
     required this.overlayBaseUrl,
+    required this.scenesServerBaseUrl,
+    required this.obsWebSocketHost,
+    required this.obsWebSocketPort,
+    required this.obsWebSocketPassword,
     required this.overlayStyle,
     required this.uiLanguage,
     required this.userVoices,
     required this.customLayers,
     required this.mentionUsers,
     required this.shoutoutUsers,
+    required this.savedChannels,
+    required this.savedMessages,
   });
 
   final String twitchUsername;
@@ -80,12 +86,32 @@ class AppSettings {
   final String systemLanguage;
   final String systemVoice;
   final String overlayBaseUrl;
+
+  /// Base del servidor propio de escenas del directo (paso 4 de la cadena
+  /// directo/tts-apliarte, `/api/escena`). Vacío por defecto a propósito: la
+  /// app publicada no debe apuntar a ninguna infraestructura de Javier, cada
+  /// usuario pone la suya (p. ej. `http://192.168.1.5:8790`).
+  final String scenesServerBaseUrl;
+
+  /// Conexión al WebSocket nativo de OBS Studio (protocolo `obs-websocket`
+  /// v5, puerto 4455 por defecto en OBS) — distinto del servidor de escenas
+  /// de arriba. Vacío por defecto: sin host no se intenta conectar, y la
+  /// pantalla que muestre las escenas reales de OBS simplemente no aparece.
+  final String obsWebSocketHost;
+  final int obsWebSocketPort;
+  final String obsWebSocketPassword;
   final OverlayStyle overlayStyle;
   final String uiLanguage;
   final Map<String, String> userVoices;
   final Map<String, String> customLayers;
   final List<String> mentionUsers;
   final List<String> shoutoutUsers;
+
+  /// Canales y mensajes guardados para los comandos `/raid [canal]` y
+  /// `/announce [mensaje]` de la botonera (sin dato de Javier por defecto —
+  /// cada usuario guarda los suyos).
+  final List<String> savedChannels;
+  final List<String> savedMessages;
 
   factory AppSettings.defaults() {
     return AppSettings(
@@ -125,12 +151,18 @@ class AppSettings {
       systemLanguage: 'auto',
       systemVoice: 'auto',
       overlayBaseUrl: 'https://tts.bot/translator.html',
+      scenesServerBaseUrl: '',
+      obsWebSocketHost: '',
+      obsWebSocketPort: 4455,
+      obsWebSocketPassword: '',
       overlayStyle: OverlayStyle.defaults(),
       uiLanguage: 'es',
       userVoices: const {},
       customLayers: const {},
       mentionUsers: const [],
       shoutoutUsers: const [],
+      savedChannels: const [],
+      savedMessages: const [],
     );
   }
 
@@ -170,12 +202,18 @@ class AppSettings {
     String? systemLanguage,
     String? systemVoice,
     String? overlayBaseUrl,
+    String? scenesServerBaseUrl,
+    String? obsWebSocketHost,
+    int? obsWebSocketPort,
+    String? obsWebSocketPassword,
     OverlayStyle? overlayStyle,
     String? uiLanguage,
     Map<String, String>? userVoices,
     Map<String, String>? customLayers,
     List<String>? mentionUsers,
     List<String>? shoutoutUsers,
+    List<String>? savedChannels,
+    List<String>? savedMessages,
   }) {
     return AppSettings(
       twitchUsername: twitchUsername ?? this.twitchUsername,
@@ -223,12 +261,18 @@ class AppSettings {
       systemLanguage: systemLanguage ?? this.systemLanguage,
       systemVoice: systemVoice ?? this.systemVoice,
       overlayBaseUrl: overlayBaseUrl ?? this.overlayBaseUrl,
+      scenesServerBaseUrl: scenesServerBaseUrl ?? this.scenesServerBaseUrl,
+      obsWebSocketHost: obsWebSocketHost ?? this.obsWebSocketHost,
+      obsWebSocketPort: obsWebSocketPort ?? this.obsWebSocketPort,
+      obsWebSocketPassword: obsWebSocketPassword ?? this.obsWebSocketPassword,
       overlayStyle: overlayStyle ?? this.overlayStyle,
       uiLanguage: uiLanguage ?? this.uiLanguage,
       userVoices: userVoices ?? this.userVoices,
       customLayers: customLayers ?? this.customLayers,
       mentionUsers: mentionUsers ?? this.mentionUsers,
       shoutoutUsers: shoutoutUsers ?? this.shoutoutUsers,
+      savedChannels: savedChannels ?? this.savedChannels,
+      savedMessages: savedMessages ?? this.savedMessages,
     );
   }
 
@@ -269,12 +313,18 @@ class AppSettings {
       'systemLanguage': systemLanguage,
       'systemVoice': systemVoice,
       'overlayBaseUrl': overlayBaseUrl,
+      'scenesServerBaseUrl': scenesServerBaseUrl,
+      'obsWebSocketHost': obsWebSocketHost,
+      'obsWebSocketPort': obsWebSocketPort,
+      'obsWebSocketPassword': obsWebSocketPassword,
       'overlayStyle': overlayStyle.toJson(),
       'uiLanguage': uiLanguage,
       'userVoices': userVoices,
       'customLayers': customLayers,
       'mentionUsers': mentionUsers,
       'shoutoutUsers': shoutoutUsers,
+      'savedChannels': savedChannels,
+      'savedMessages': savedMessages,
     };
   }
 
@@ -324,6 +374,10 @@ class AppSettings {
       overlayBaseUrl:
           json['overlayBaseUrl'] as String? ??
           'https://tts.bot/translator.html',
+      scenesServerBaseUrl: json['scenesServerBaseUrl'] as String? ?? '',
+      obsWebSocketHost: json['obsWebSocketHost'] as String? ?? '',
+      obsWebSocketPort: json['obsWebSocketPort'] as int? ?? 4455,
+      obsWebSocketPassword: json['obsWebSocketPassword'] as String? ?? '',
       overlayStyle: json['overlayStyle'] != null
           ? OverlayStyle.fromJson(json['overlayStyle'] as Map<String, dynamic>)
           : OverlayStyle.defaults(),
@@ -339,6 +393,14 @@ class AppSettings {
               .toList() ??
           const [],
       shoutoutUsers: (json['shoutoutUsers'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+      savedChannels: (json['savedChannels'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+      savedMessages: (json['savedMessages'] as List<dynamic>?)
               ?.map((e) => e.toString())
               .toList() ??
           const [],

@@ -29,6 +29,27 @@ class AppStrings {
   String get loginGoogleTooltip => _es
       ? 'Abre la web en el navegador — la sesión Google queda guardada ahí'
       : 'Opens the site in your browser — Google session is saved there';
+  // Servidor propio de escenas (paso 4/5 de la cadena directo/tts-apliarte)
+  String get scenesServerTitle =>
+      _es ? 'Servidor de escenas' : 'Scenes server';
+  String get scenesServerUrlLabel =>
+      _es ? 'Dirección de tu servidor' : 'Your server address';
+  String get scenesServerUrlHint => 'http://192.168.1.5:8790';
+  String get scenesServerHelp => _es
+      ? 'Opcional. Apunta a tu propio servidor local (ver directo/) para cambiar la escena de tu directo desde esta app. Vacío por defecto: nadie se conecta al servidor de Javier sin querer.'
+      : 'Optional. Point it at your own local server (see directo/) to change your stream scene from this app. Empty by default: nobody connects to Javier\'s server by accident.';
+
+  // Conexión al WebSocket nativo de OBS (obs-websocket v5)
+  String get obsWebSocketTitle => _es ? 'Conexión con OBS' : 'OBS connection';
+  String get obsWebSocketHostLabel => _es ? 'IP de tu PC con OBS' : 'IP of your OBS PC';
+  String get obsWebSocketHostHint => '192.168.1.18';
+  String get obsWebSocketPortLabel => _es ? 'Puerto' : 'Port';
+  String get obsWebSocketPasswordLabel =>
+      _es ? 'Contraseña del servidor WebSocket' : 'WebSocket server password';
+  String get obsWebSocketHelp => _es
+      ? 'Opcional. En OBS: Herramientas → Ajustes del servidor WebSocket → marca "Habilitar servidor WebSocket" y copia aquí la IP, el puerto y la contraseña. Vacío por defecto: sin esto, la sección de escenas de OBS no aparece.'
+      : 'Optional. In OBS: Tools → WebSocket Server Settings → check "Enable WebSocket server" and copy the IP, port and password here. Empty by default: without this, the OBS scenes section does not appear.';
+
   String get confirmStartTitle => _es ? '¿Empezar directo?' : 'Go Live?';
   String get confirmStartMsg => _es
       ? '¿Seguro que quieres empezar el directo?'
@@ -197,4 +218,7 @@ class AppStrings {
   String get notConnectedToSend =>
       _es ? 'Conéctate al chat primero.' : 'Connect to chat first.';
   String get removeTooltip => _es ? 'Quitar' : 'Remove';
+  String get fixedShoutoutTooltip => _es
+      ? 'Shoutout fijo de ApliArte, creador de la app — no se puede quitar'
+      : "ApliArte's fixed shoutout, the app's creator — can't be removed";
 }
