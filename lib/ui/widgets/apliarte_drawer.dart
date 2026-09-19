@@ -10,6 +10,7 @@ import '../chat_screen.dart';
 import '../home_screen.dart';
 import '../settings/advanced_settings_screens.dart';
 import 'command_buttons_card.dart';
+import 'ignored_users_card.dart';
 
 /// Drawer canónico para el ecosistema ApliArte.
 ///
@@ -183,6 +184,28 @@ class ApliArteDrawer extends StatelessWidget {
                           HomeScreen.railIndexNotifier.value = 3;
                           WidgetsBinding.instance.addPostFrameCallback((_) {
                             final ctx = comandosUsuariosCanalesKey.currentContext;
+                            if (ctx != null) {
+                              Scrollable.ensureVisible(
+                                ctx,
+                                duration: const Duration(milliseconds: 400),
+                                curve: Curves.easeInOut,
+                              );
+                            }
+                          });
+                        },
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.volume_off_rounded, color: Colors.white70),
+                        title: const Text('Usuarios silenciados'),
+                        subtitle: const Text(
+                          'Muteo de bots y usuarios en TTS',
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                        ),
+                        onTap: () {
+                          Navigator.pop(context);
+                          HomeScreen.railIndexNotifier.value = 3;
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            final ctx = ignoredUsersCardKey.currentContext;
                             if (ctx != null) {
                               Scrollable.ensureVisible(
                                 ctx,

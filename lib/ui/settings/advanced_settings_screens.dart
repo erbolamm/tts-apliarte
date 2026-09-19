@@ -6,6 +6,7 @@ import '../../controllers/settings_controller.dart';
 import '../../models/app_settings.dart';
 import '../../utils/app_strings.dart';
 import '../../utils/obs_qr_parser.dart';
+import '../widgets/ignored_users_card.dart';
 import '../widgets/section_card.dart';
 import '../widgets/settings_field.dart';
 import 'obs_qr_scanner_screen.dart';
@@ -459,6 +460,8 @@ class FiltersConfigScreen extends StatelessWidget {
               ],
             ),
           ),
+          const SizedBox(height: 16),
+          const IgnoredUsersCard(),
         ],
       ),
     );

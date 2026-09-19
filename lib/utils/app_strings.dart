@@ -221,4 +221,23 @@ class AppStrings {
   String get fixedShoutoutTooltip => _es
       ? 'Shoutout fijo de ApliArte, creador de la app — no se puede quitar'
       : "ApliArte's fixed shoutout, the app's creator — can't be removed";
+
+  // Usuarios silenciados (TTS)
+  String get ignoredUsersTitle =>
+      _es ? 'Usuarios silenciados' : 'Silenced users';
+  String get ignoredUsersSubtitle => _es
+      ? 'Los mensajes de estos usuarios no sonarán en el TTS del directo.'
+      : 'Messages from these users will not be read aloud by stream TTS.';
+  String get ignoredUserInputHint =>
+      _es ? 'Usuario a silenciar (ej. streamelements)' : 'User to silence (e.g. streamelements)';
+  String get ignoredUserInputLabel =>
+      _es ? 'Silenciar usuario' : 'Silence user';
+  String get ignoredUsersEmpty =>
+      _es ? 'No hay usuarios silenciados.' : 'No silenced users.';
+  String get removeIgnoredTooltip =>
+      _es ? 'Dejar de silenciar' : 'Unsilence';
+  String get resetIgnoredUsersBtn =>
+      _es ? 'Restablecer bots por defecto' : 'Reset default bots';
+  String get ignoredUsersCount =>
+      _es ? 'Lista negra' : 'Blacklist';
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../controllers/app_controller.dart';
@@ -6,18 +7,18 @@ import '../../controllers/settings_controller.dart';
 import '../../services/walk_link_service.dart';
 import 'section_card.dart';
 
-/// Enlace WebRTC P2P del modo paseo (paso 3 de la cadena
-/// directo/tts-apliarte). Tarjeta que vive en la vista de Escenas
-/// (rail 0) debajo de `ObsScenesCard` y antes de `StreamDeckCard`.
+/// Enlace WebRTC P2P (modo directo/paseo).
 ///
-/// Si `scenesServerBaseUrl` está vacío, la tarjeta se oculta entera —
-/// mismo patrón que `ObsScenesCard`: si no hay infraestructura, no se
-/// muestra nada.
+/// Ofrece dos botones táctiles independientes y destacados:
+/// - 🎙️ Audio (micrófono del móvil transmitiendo al directo)
+/// - 📹 Cámara (vídeo del móvil transmitiendo a OBS)
 ///
-/// Regla canónica de iconos con tooltip a 3 s (AGENTS.md §3.2): los
-/// interruptores son SwitchListTile con etiquetas claras, sin título
-/// HTML nativo, sin preview local de la cámara (decisión de Javier,
-/// 2026-09-16).
+/// Decisión de diseño:
+/// - Cada botón es totalmente independiente (activa/desactiva su pista).
+/// - NUNCA se muestra vista previa local del vídeo en la pantalla del móvil
+///   (ahorra batería y mantiene la interfaz despejada).
+/// - El vídeo y el audio se visualizan en el PC añadiendo en OBS la fuente:
+///   `http://<servidor>/walk.html?session=<sesion>`.
 class WalkLinkCard extends StatelessWidget {
   const WalkLinkCard({super.key, required this.appController});
 
@@ -25,12 +26,11 @@ class WalkLinkCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final settings = context.watch<SettingsController>().settings;
-    if (settings.scenesServerBaseUrl.trim().isEmpty) {
+    if (!appController.isInitialized) {
       return const SizedBox.shrink();
     }
     return SectionCard(
-      title: '🚶 Enlace en directo (modo paseo)',
+      title: '📡 Retransmisión Móvil (Audio y Cámara)',
       initiallyExpanded: true,
       child: _WalkLinkBody(appController: appController),
     );
@@ -42,40 +42,73 @@ class _WalkLinkBody extends StatelessWidget {
 
   final AppController appController;
 
+  static const String defaultTailscaleUrl = 'http://100.75.119.108:8790';
+  static const String defaultLanUrl = 'http://192.168.1.10:8790';
+
   @override
   Widget build(BuildContext context) {
-    // El servicio emite cambios (estado, errores, mic/cam); los
-    // reenviamos a través del AppController para refrescar la UI.
     final walk = appController.walkLink;
+    final settingsCtrl = context.watch<SettingsController>();
+
     return AnimatedBuilder(
       animation: walk,
       builder: (context, _) {
         final estado = walk.state;
         final detalle = walk.stateDetail;
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _SessionIdField(appController: appController),
-            const SizedBox(height: 8),
-            _SwitchTile(
-              icon: Icons.mic,
-              label: 'Voz',
-              enabled: walk.micEnabled,
-              onChanged: (v) => _toggleMic(context, v),
+            // ── Dos botones grandes e independientes ─────────────────────────
+            Row(
+              children: [
+                Expanded(
+                  child: _TransmissionButton(
+                    icon: walk.micEnabled ? Icons.mic : Icons.mic_off,
+                    label: 'AUDIO',
+                    statusText: walk.micEnabled ? 'TRANSMITIENDO' : 'APAGADO',
+                    isActive: walk.micEnabled,
+                    activeColor: Colors.greenAccent.shade400,
+                    onTap: () => _toggleMic(context, walk.micEnabled),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _TransmissionButton(
+                    icon: walk.camEnabled ? Icons.videocam : Icons.videocam_off,
+                    label: 'CÁMARA',
+                    statusText: walk.camEnabled ? 'TRANSMITIENDO' : 'APAGADA',
+                    subtitle: 'Sin preview en móvil',
+                    isActive: walk.camEnabled,
+                    activeColor: Colors.lightBlueAccent,
+                    onTap: () => _toggleCam(context, walk.camEnabled),
+                  ),
+                ),
+              ],
             ),
-            _SwitchTile(
-              icon: Icons.videocam,
-              label: 'Cámara',
-              enabled: walk.camEnabled,
-              onChanged: (v) => _toggleCam(context, v),
-            ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
+
+            // ── Estado de la señal WebRTC ───────────────────────────────────
             _StatusLine(estado: estado, detalle: detalle),
-            const SizedBox(height: 8),
-            const Text(
-              'El móvil no muestra lo que está enviando — se ve solo en el '
-              'directo de tu PC.',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
+            const SizedBox(height: 12),
+
+            // ── Botón de apagar pantalla (ahorro de batería) ─────────────────
+            FilledButton.icon(
+              icon: const Icon(Icons.power_settings_new),
+              label: const Text('Apagar pantalla (ahorro batería)'),
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.blueGrey.shade900,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              onPressed: () => appController.enterScreenOffMode(),
+            ),
+            const SizedBox(height: 12),
+
+            // ── Configuración y Enlace para OBS (plegable) ──────────────────
+            _ConfigAndObsSection(
+              appController: appController,
+              settingsCtrl: settingsCtrl,
             ),
           ],
         );
@@ -83,93 +116,287 @@ class _WalkLinkBody extends StatelessWidget {
     );
   }
 
-  Future<void> _toggleMic(BuildContext context, bool value) async {
-    final settings = context.read<SettingsController>();
-    await settings.updateWith((s) => s.copyWith(walkMicEnabled: value));
-  }
-
-  Future<void> _toggleCam(BuildContext context, bool value) async {
-    final settings = context.read<SettingsController>();
-    await settings.updateWith((s) => s.copyWith(walkCamEnabled: value));
-  }
-}
-
-class _SessionIdField extends StatefulWidget {
-  const _SessionIdField({required this.appController});
-  final AppController appController;
-
-  @override
-  State<_SessionIdField> createState() => _SessionIdFieldState();
-}
-
-class _SessionIdFieldState extends State<_SessionIdField> {
-  late final TextEditingController _ctrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = TextEditingController(
-      text: widget.appController.walkLink.sessionId ?? '',
+  Future<void> _toggleMic(BuildContext context, bool currentlyEnabled) async {
+    final settingsCtrl = context.read<SettingsController>();
+    _ensureDefaults(settingsCtrl);
+    await settingsCtrl.updateWith(
+      (s) => s.copyWith(walkMicEnabled: !currentlyEnabled),
     );
   }
 
-  @override
-  void didUpdateWidget(_SessionIdField oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final current = widget.appController.walkLink.sessionId ?? '';
-    if (_ctrl.text != current && !_ctrl.selection.isValid) {
-      _ctrl.text = current;
+  Future<void> _toggleCam(BuildContext context, bool currentlyEnabled) async {
+    final settingsCtrl = context.read<SettingsController>();
+    _ensureDefaults(settingsCtrl);
+    await settingsCtrl.updateWith(
+      (s) => s.copyWith(walkCamEnabled: !currentlyEnabled),
+    );
+  }
+
+  void _ensureDefaults(SettingsController settingsCtrl) {
+    if (settingsCtrl.settings.scenesServerBaseUrl.trim().isEmpty) {
+      settingsCtrl.updateWith(
+        (s) => s.copyWith(scenesServerBaseUrl: defaultTailscaleUrl),
+      );
+    }
+    if (appController.walkLink.sessionId == null ||
+        appController.walkLink.sessionId!.trim().isEmpty) {
+      appController.setWalkSessionId('directo');
     }
   }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: _ctrl,
-      decoration: const InputDecoration(
-        labelText: 'ID de sesión',
-        helperText: 'Misma cadena que en walk.html?session=… (6 caracteres)',
-        isDense: true,
-        border: OutlineInputBorder(),
-      ),
-      onChanged: (value) {
-        widget.appController.setWalkSessionId(value);
-      },
-      onSubmitted: (value) {
-        widget.appController.setWalkSessionId(value);
-      },
-    );
-  }
 }
 
-class _SwitchTile extends StatelessWidget {
-  const _SwitchTile({
+class _TransmissionButton extends StatelessWidget {
+  const _TransmissionButton({
     required this.icon,
     required this.label,
-    required this.enabled,
-    required this.onChanged,
+    required this.statusText,
+    required this.isActive,
+    required this.activeColor,
+    required this.onTap,
+    this.subtitle,
   });
 
   final IconData icon;
   final String label;
-  final bool enabled;
-  final ValueChanged<bool> onChanged;
+  final String statusText;
+  final String? subtitle;
+  final bool isActive;
+  final Color activeColor;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return SwitchListTile(
-      contentPadding: EdgeInsets.zero,
-      dense: true,
-      secondary: Icon(icon, size: 20),
-      title: Text(label),
-      value: enabled,
-      onChanged: onChanged,
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isActive
+        ? activeColor.withValues(alpha: 0.18)
+        : (isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.shade100);
+    final borderColor = isActive
+        ? activeColor
+        : (isDark ? Colors.white24 : Colors.grey.shade400);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: borderColor,
+              width: isActive ? 2.5 : 1.0,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 34,
+                color: isActive
+                    ? activeColor
+                    : (isDark ? Colors.white54 : Colors.grey.shade600),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                  letterSpacing: 0.5,
+                  color: isActive ? activeColor : null,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isActive ? activeColor : Colors.grey,
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    statusText,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight:
+                          isActive ? FontWeight.bold : FontWeight.normal,
+                      color: isActive ? activeColor : Colors.grey,
+                    ),
+                  ),
+                ],
+              ),
+              if (subtitle != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  subtitle!,
+                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ConfigAndObsSection extends StatefulWidget {
+  const _ConfigAndObsSection({
+    required this.appController,
+    required this.settingsCtrl,
+  });
+
+  final AppController appController;
+  final SettingsController settingsCtrl;
+
+  @override
+  State<_ConfigAndObsSection> createState() => _ConfigAndObsSectionState();
+}
+
+class _ConfigAndObsSectionState extends State<_ConfigAndObsSection> {
+  late final TextEditingController _serverCtrl;
+  late final TextEditingController _sessionCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    final currentServer = widget.settingsCtrl.settings.scenesServerBaseUrl;
+    _serverCtrl = TextEditingController(
+      text: currentServer.isNotEmpty
+          ? currentServer
+          : _WalkLinkBody.defaultTailscaleUrl,
+    );
+    final currentSession = widget.appController.walkLink.sessionId ?? '';
+    _sessionCtrl = TextEditingController(
+      text: currentSession.isNotEmpty ? currentSession : 'directo',
+    );
+  }
+
+  @override
+  void dispose() {
+    _serverCtrl.dispose();
+    _sessionCtrl.dispose();
+    super.dispose();
+  }
+
+  String get _obsSourceUrl {
+    final server = _serverCtrl.text.trim();
+    final session = _sessionCtrl.text.trim();
+    if (server.isEmpty) return '';
+    final cleanServer =
+        server.endsWith('/') ? server.substring(0, server.length - 1) : server;
+    return '$cleanServer/walk.html?session=${session.isNotEmpty ? session : "directo"}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0,
+      color: Theme.of(context).cardColor.withValues(alpha: 0.5),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+        childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        leading: const Icon(Icons.settings, size: 20),
+        title: const Text(
+          'Configurar servidor y enlace OBS',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+        subtitle: const Text(
+          'Dirección del Mac y URL para Browser Source',
+          style: TextStyle(fontSize: 11, color: Colors.grey),
+        ),
+        children: [
+          const SizedBox(height: 8),
+          TextField(
+            controller: _serverCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Servidor directo (Mac)',
+              helperText: 'Puerto :8790 del Mac (Tailscale o LAN)',
+              isDense: true,
+              border: OutlineInputBorder(),
+            ),
+            onChanged: (val) {
+              widget.settingsCtrl.updateWith(
+                (s) => s.copyWith(scenesServerBaseUrl: val.trim()),
+              );
+            },
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            children: [
+              ActionChip(
+                label: const Text('Tailscale'),
+                avatar: const Icon(Icons.vpn_lock, size: 14),
+                onPressed: () {
+                  _serverCtrl.text = _WalkLinkBody.defaultTailscaleUrl;
+                  widget.settingsCtrl.updateWith(
+                    (s) => s.copyWith(
+                      scenesServerBaseUrl: _WalkLinkBody.defaultTailscaleUrl,
+                    ),
+                  );
+                },
+              ),
+              ActionChip(
+                label: const Text('LAN'),
+                avatar: const Icon(Icons.wifi, size: 14),
+                onPressed: () {
+                  _serverCtrl.text = _WalkLinkBody.defaultLanUrl;
+                  widget.settingsCtrl.updateWith(
+                    (s) => s.copyWith(
+                      scenesServerBaseUrl: _WalkLinkBody.defaultLanUrl,
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _sessionCtrl,
+            decoration: const InputDecoration(
+              labelText: 'ID de sesión',
+              helperText: 'Identificador para enlazar teléfono y OBS',
+              isDense: true,
+              border: OutlineInputBorder(),
+            ),
+            onChanged: (val) {
+              widget.appController.setWalkSessionId(val.trim());
+            },
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            icon: const Icon(Icons.copy, size: 16),
+            label: const Text('Copiar URL para OBS (Cámara/Audio)'),
+            onPressed: () {
+              final url = _obsSourceUrl;
+              if (url.isEmpty) return;
+              Clipboard.setData(ClipboardData(text: url));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'URL copiada: $url\nAgrégala en OBS como fuente Navegador.',
+                  ),
+                  duration: const Duration(seconds: 4),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 }
@@ -186,7 +413,7 @@ class _StatusLine extends StatelessWidget {
     switch (estado) {
       case WalkLinkState.idle:
         color = Colors.grey;
-        texto = 'Apagado';
+        texto = 'Señal apagada';
         break;
       case WalkLinkState.requestingPermissions:
         color = Colors.amber;
@@ -196,11 +423,11 @@ class _StatusLine extends StatelessWidget {
         break;
       case WalkLinkState.connecting:
         color = Colors.blue;
-        texto = 'Enlazando…';
+        texto = 'Enlazando con el Mac…';
         break;
       case WalkLinkState.connected:
         color = Colors.green;
-        texto = 'En directo';
+        texto = 'En directo (WebRTC P2P)';
         break;
       case WalkLinkState.error:
         color = Colors.red;
@@ -212,7 +439,7 @@ class _StatusLine extends StatelessWidget {
         Icon(Icons.circle, size: 10, color: color),
         const SizedBox(width: 8),
         Expanded(
-          child: Text(texto, style: TextStyle(color: color)),
+          child: Text(texto, style: TextStyle(color: color, fontSize: 13)),
         ),
       ],
     );

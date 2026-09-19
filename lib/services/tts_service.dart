@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
 class TtsService {
@@ -24,6 +26,25 @@ class TtsService {
       _busy = false;
       _processQueue();
     });
+
+    // En iOS: configurar categoría 'playback' con mezcla y bluetooth
+    // para que el TTS continúe sonando con la pantalla apagada o bloqueada.
+    if (!kIsWeb && Platform.isIOS) {
+      try {
+        await _tts.setIosAudioCategory(
+          IosTextToSpeechAudioCategory.playback,
+          [
+            IosTextToSpeechAudioCategoryOptions.defaultToSpeaker,
+            IosTextToSpeechAudioCategoryOptions.allowBluetooth,
+            IosTextToSpeechAudioCategoryOptions.allowBluetoothA2DP,
+            IosTextToSpeechAudioCategoryOptions.mixWithOthers,
+          ],
+          IosTextToSpeechAudioMode.defaultMode,
+        );
+      } catch (e) {
+        debugPrint('Error configurando iOS audio category en TTS: $e');
+      }
+    }
   }
 
   Future<List<dynamic>> getVoices() async {

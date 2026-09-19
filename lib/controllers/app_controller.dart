@@ -15,6 +15,8 @@ import '../services/translation_service.dart';
 import '../services/twitch_auth_service.dart';
 import '../services/twitch_irc_client.dart';
 import '../services/walk_link_service.dart';
+import '../services/screen_off_service.dart';
+import '../services/foreground_service.dart';
 import '../utils/emote_utils.dart';
 import '../utils/rate_limiter.dart';
 import '../utils/similarity_filter.dart';
@@ -22,11 +24,17 @@ import '../utils/voice_pitch.dart';
 import 'settings_controller.dart';
 
 class AppController extends ChangeNotifier {
-  AppController({required SettingsController settingsController})
-    : _settingsController = settingsController {
+  AppController({
+    required SettingsController settingsController,
+    ForegroundService? foregroundService,
+  })  : _settingsController = settingsController,
+        _foregroundService = foregroundService ?? ForegroundService() {
     _settingsController.addListener(_onSettingsChanged);
     _init();
   }
+
+  final ForegroundService _foregroundService;
+  ForegroundService get foregroundService => _foregroundService;
 
   SettingsController _settingsController;
   AppSettings get settings => _settingsController.settings;
@@ -52,6 +60,14 @@ class AppController extends ChangeNotifier {
   /// SettingsController para inyectar valores en pruebas sin tocar
   /// AppSettings (que está serializado en JSON dentro del mismo blob).
   SharedPreferences? _walkPrefs;
+
+  /// Modo paseo (paso 5): gestión de pantalla apagada (bajo consumo OLED).
+  final ScreenOffService _screenOff = ScreenOffService();
+  ScreenOffService get screenOff => _screenOff;
+  bool get isScreenOff => _screenOff.isScreenOff;
+
+  Future<void> enterScreenOffMode() => _screenOff.enterScreenOffMode();
+  Future<void> exitScreenOffMode() => _screenOff.exitScreenOffMode();
 
   final OverlayServer _overlayServer = OverlayServer();
   bool _authLoading = false;
@@ -170,6 +186,7 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> _init() async {
+    await _foregroundService.init();
     await _tts.init();
     _overlayServer.onConnect = () => connect();
     _overlayServer.onDisconnect = () => disconnect();
@@ -190,13 +207,20 @@ class AppController extends ChangeNotifier {
     // para que `_onSettingsChanged` lo encuentre ya creado cuando
     // propague `walkMicEnabled` / `walkCamEnabled` desde los ajustes.
     _walkLink = WalkLinkService(initialServerBaseUrl: settings.scenesServerBaseUrl)
-      ..addListener(notifyListeners);
+      ..addListener(_onWalkLinkChanged);
     // SettingsController.load() puede haber notificado antes de que
     // AppController tuviera listener adjunto: releer los ajustes y
     // empujar al servicio de paseo explícitamente.
     _propagarAjustesAWalkLink();
+    _screenOff.addListener(notifyListeners);
+    _syncForegroundService();
     notifyListeners();
     unawaited(_conectarObsSiHaceFalta());
+  }
+
+  void _onWalkLinkChanged() {
+    _syncForegroundService();
+    notifyListeners();
   }
 
   void attachSettings(SettingsController controller) {
@@ -246,11 +270,15 @@ class AppController extends ChangeNotifier {
     final localeId = _mapLanguageToLocale(settings.systemLanguage);
     await _speech.start(localeId: localeId == 'auto' ? null : localeId);
     _addLog(LogLevel.info, 'Speech recognition started.');
+    _syncForegroundService();
+    notifyListeners();
   }
 
   Future<void> stopSpeech() async {
     await _speech.stop();
     _addLog(LogLevel.info, 'Speech recognition stopped.');
+    _syncForegroundService();
+    notifyListeners();
   }
 
   bool get isSpeechListening => _speech.isListening;
@@ -304,6 +332,7 @@ class AppController extends ChangeNotifier {
     } else {
       _addLog(LogLevel.warning, 'Disconnected.');
     }
+    _syncForegroundService();
     notifyListeners();
   }
 
@@ -329,48 +358,56 @@ class AppController extends ChangeNotifier {
   }
 
   // Lista predeterminada de bots y usuarios silenciados
-  static const defaultIgnoredUsers = {
-    'streamelements',
-    'nightbot',
-    'moobot',
-    'wizebot',
-    'fossabot',
-    'pretzelrocks',
-    'soundalerts',
-    'botrix',
-    'streamlabs',
-    'streamlabsbot',
-    'phantombot',
-    'deepbot',
-    'coebot',
-    'hnlbot',
-    'ohbot',
-    'ankhbot',
-    'streamcaptainbot',
-    'kofistreambot',
-    'ko_fi',
-    'pepitoelpapas',
-  };
+  static const defaultIgnoredUsers = AppSettings.defaultIgnoredUsers;
 
-  final Set<String> _ignoredUsers = Set<String>.from(defaultIgnoredUsers);
+  /// Lista de usuarios silenciados para TTS (bots y usuarios silenciados).
+  /// Se persiste en [AppSettings] a través de [SettingsController].
+  Set<String> get ignoredUsers => Set.unmodifiable(
+        settings.ignoredUsers.map((u) => u.trim().toLowerCase()),
+      );
 
-  Set<String> get ignoredUsers => Set.unmodifiable(_ignoredUsers);
+  List<String> get ignoredUsersList => List.unmodifiable(settings.ignoredUsers);
 
   void ignoreUser(String username) {
-    if (username.trim().isNotEmpty) {
-      _ignoredUsers.add(username.trim().toLowerCase());
-      notifyListeners();
+    var clean = username.trim();
+    while (clean.startsWith('@')) {
+      clean = clean.substring(1).trim();
     }
+    if (clean.isEmpty) return;
+    if (isUserIgnored(clean)) return;
+
+    final updated = [...settings.ignoredUsers, clean];
+    _settingsController.updateWith((s) => s.copyWith(ignoredUsers: updated));
   }
 
   void unignoreUser(String username) {
-    if (_ignoredUsers.remove(username.trim().toLowerCase())) {
-      notifyListeners();
+    var clean = username.trim();
+    while (clean.startsWith('@')) {
+      clean = clean.substring(1).trim();
+    }
+    final cleanLower = clean.toLowerCase();
+    final updated = settings.ignoredUsers
+        .where((u) => u.trim().toLowerCase() != cleanLower)
+        .toList();
+    if (updated.length != settings.ignoredUsers.length) {
+      _settingsController.updateWith((s) => s.copyWith(ignoredUsers: updated));
     }
   }
 
   bool isUserIgnored(String username) {
-    return _ignoredUsers.contains(username.trim().toLowerCase());
+    var clean = username.trim();
+    while (clean.startsWith('@')) {
+      clean = clean.substring(1).trim();
+    }
+    final target = clean.toLowerCase();
+    return settings.ignoredUsers
+        .any((u) => u.trim().toLowerCase() == target);
+  }
+
+  void resetIgnoredUsers() {
+    _settingsController.updateWith(
+      (s) => s.copyWith(ignoredUsers: AppSettings.defaultIgnoredUsers),
+    );
   }
 
   Future<void> _processChatMessage(TwitchChatMessage message) async {
@@ -806,6 +843,40 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Sincroniza el Foreground Service (notificación persistente y wakelock)
+  /// con el estado operativo de la app. Si la app está conectada al chat,
+  /// dictando por voz o con el enlace del modo paseo activo, el servicio
+  /// se mantiene en ejecución para evitar que el sistema suspenda el proceso,
+  /// el audio o la red al apagar la pantalla.
+  void _syncForegroundService() {
+    final walkActive = _walkLink != null &&
+        (_walkLink!.micEnabled ||
+            _walkLink!.camEnabled ||
+            _walkLink!.state == WalkLinkState.connected);
+
+    final chatActive = _connected;
+    final speechActive = _speech.isListening;
+
+    final shouldRun = chatActive || walkActive || speechActive;
+
+    if (shouldRun) {
+      const title = 'TTS ApliArte';
+      final String text;
+      if (walkActive && chatActive) {
+        text = 'Modo paseo y chat (#${settings.twitchChannel}) activos';
+      } else if (walkActive) {
+        text = 'Modo paseo activo (en directo)';
+      } else if (chatActive) {
+        text = 'Leyendo chat de #${settings.twitchChannel}';
+      } else {
+        text = 'Dictado por voz activo';
+      }
+      unawaited(_foregroundService.startOrUpdate(title: title, text: text));
+    } else {
+      unawaited(_foregroundService.stop());
+    }
+  }
+
   @override
   void dispose() {
     _settingsController.removeListener(_onSettingsChanged);
@@ -814,7 +885,11 @@ class AppController extends ChangeNotifier {
     _tts.stop();
     _overlayServer.stop();
     _obsClient?.desconectar();
+    _walkLink?.removeListener(_onWalkLinkChanged);
     unawaited(_walkLink?.dispose());
+    unawaited(_foregroundService.stop());
+    _screenOff.removeListener(notifyListeners);
+    _screenOff.dispose();
     super.dispose();
   }
 }

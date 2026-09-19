@@ -14,9 +14,10 @@ import 'widgets/obs_scenes_card.dart';
 import 'widgets/section_card.dart';
 import 'widgets/settings_field.dart';
 import 'widgets/status_pill.dart';
-import 'widgets/stream_deck_card.dart';
 import 'widgets/support_banner_card.dart';
 import 'widgets/walk_link_card.dart';
+import 'widgets/ignored_users_card.dart';
+import 'widgets/screen_off_overlay.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -60,7 +61,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final settings = settingsController.settings;
     final s = AppStrings(settings.uiLanguage);
 
-    return Scaffold(
+    final scaffold = Scaffold(
       drawer: const ApliArteDrawer(),
       appBar: AppBar(
         title: const Text('TTS ApliArte'),
@@ -71,7 +72,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 : AppStrings(settings.uiLanguage).twitchOffline,
             isActive: appController.isConnected,
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
+          Tooltip(
+            message: 'Apagar pantalla (ahorro paseo)',
+            child: IconButton(
+              icon: const Icon(Icons.nightlight_round),
+              onPressed: () => appController.enterScreenOffMode(),
+            ),
+          ),
+          const SizedBox(width: 4),
           Tooltip(
             message: 'Restablecer opciones',
             child: IconButton(
@@ -126,8 +135,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ObsScenesCard(appController: appController),
                   const SizedBox(height: 16),
                   WalkLinkCard(appController: appController),
-                  const SizedBox(height: 16),
-                  const StreamDeckCard(),
                 ],
               );
               break;
@@ -147,7 +154,13 @@ class _HomeScreenState extends State<HomeScreen> {
               break;
             case 3:
             default:
-              activeContent = const CommandButtonsCard();
+              activeContent = const Column(
+                children: [
+                  CommandButtonsCard(),
+                  SizedBox(height: 16),
+                  IgnoredUsersCard(),
+                ],
+              );
               break;
           }
 
@@ -237,6 +250,16 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         },
       ),
+    );
+
+    return Stack(
+      children: [
+        scaffold,
+        if (appController.isScreenOff)
+          ScreenOffOverlay(
+            onWakeUp: () => appController.exitScreenOffMode(),
+          ),
+      ],
     );
   }
 

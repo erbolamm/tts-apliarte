@@ -49,6 +49,7 @@ class AppSettings {
     required this.shoutoutUsers,
     required this.savedChannels,
     required this.savedMessages,
+    required this.ignoredUsers,
 
     required this.walkMicEnabled,
     required this.walkCamEnabled,
@@ -116,12 +117,39 @@ class AppSettings {
   final List<String> savedChannels;
   final List<String> savedMessages;
 
+  /// Lista de usuarios silenciados para TTS (bots y usuarios silenciados).
+  final List<String> ignoredUsers;
+
   /// Modo paseo (paso 3 de la cadena directo/tts-apliarte): interruptores
   /// independientes del enlace WebRTC P2P hacia directo/public/walk.html.
   /// La app no muestra preview local de la cámara — la pista sale al peer
   /// y se ve solo en el directo del PC. Por defecto apagados.
   final bool walkMicEnabled;
   final bool walkCamEnabled;
+
+  /// Lista predeterminada de bots y usuarios silenciados para TTS.
+  static const defaultIgnoredUsers = <String>[
+    'streamelements',
+    'nightbot',
+    'moobot',
+    'wizebot',
+    'fossabot',
+    'pretzelrocks',
+    'soundalerts',
+    'botrix',
+    'streamlabs',
+    'streamlabsbot',
+    'phantombot',
+    'deepbot',
+    'coebot',
+    'hnlbot',
+    'ohbot',
+    'ankhbot',
+    'streamcaptainbot',
+    'kofistreambot',
+    'ko_fi',
+    'pepitoelpapas',
+  ];
 
   factory AppSettings.defaults() {
     return AppSettings(
@@ -173,6 +201,7 @@ class AppSettings {
       shoutoutUsers: const [],
       savedChannels: const [],
       savedMessages: const [],
+      ignoredUsers: defaultIgnoredUsers,
 
       walkMicEnabled: false,
       walkCamEnabled: false,
@@ -227,6 +256,7 @@ class AppSettings {
     List<String>? shoutoutUsers,
     List<String>? savedChannels,
     List<String>? savedMessages,
+    List<String>? ignoredUsers,
 
     bool? walkMicEnabled,
     bool? walkCamEnabled,
@@ -289,6 +319,7 @@ class AppSettings {
       shoutoutUsers: shoutoutUsers ?? this.shoutoutUsers,
       savedChannels: savedChannels ?? this.savedChannels,
       savedMessages: savedMessages ?? this.savedMessages,
+      ignoredUsers: ignoredUsers ?? this.ignoredUsers,
 
       walkMicEnabled: walkMicEnabled ?? this.walkMicEnabled,
       walkCamEnabled: walkCamEnabled ?? this.walkCamEnabled,
@@ -344,6 +375,7 @@ class AppSettings {
       'shoutoutUsers': shoutoutUsers,
       'savedChannels': savedChannels,
       'savedMessages': savedMessages,
+      'ignoredUsers': ignoredUsers,
 
       'walkMicEnabled': walkMicEnabled,
       'walkCamEnabled': walkCamEnabled,
@@ -426,6 +458,10 @@ class AppSettings {
               ?.map((e) => e.toString())
               .toList() ??
           const [],
+      ignoredUsers: (json['ignoredUsers'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          defaultIgnoredUsers,
 
       walkMicEnabled: json['walkMicEnabled'] as bool? ?? false,
       walkCamEnabled: json['walkCamEnabled'] as bool? ?? false,
