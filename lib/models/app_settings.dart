@@ -49,6 +49,9 @@ class AppSettings {
     required this.shoutoutUsers,
     required this.savedChannels,
     required this.savedMessages,
+
+    required this.walkMicEnabled,
+    required this.walkCamEnabled,
   });
 
   final String twitchUsername;
@@ -113,6 +116,13 @@ class AppSettings {
   final List<String> savedChannels;
   final List<String> savedMessages;
 
+  /// Modo paseo (paso 3 de la cadena directo/tts-apliarte): interruptores
+  /// independientes del enlace WebRTC P2P hacia directo/public/walk.html.
+  /// La app no muestra preview local de la cámara — la pista sale al peer
+  /// y se ve solo en el directo del PC. Por defecto apagados.
+  final bool walkMicEnabled;
+  final bool walkCamEnabled;
+
   factory AppSettings.defaults() {
     return AppSettings(
       twitchUsername: 'apliarte',
@@ -123,7 +133,7 @@ class AppSettings {
       ttsEnabled: true,
       autoTranslateEnabled: true,
       autoTranslateToChannel: false,
-      deleteBangCommands: false,
+      deleteBangCommands: true,
       allowEveryone: true,
       allowMods: true,
       allowVips: true,
@@ -163,6 +173,9 @@ class AppSettings {
       shoutoutUsers: const [],
       savedChannels: const [],
       savedMessages: const [],
+
+      walkMicEnabled: false,
+      walkCamEnabled: false,
     );
   }
 
@@ -214,6 +227,9 @@ class AppSettings {
     List<String>? shoutoutUsers,
     List<String>? savedChannels,
     List<String>? savedMessages,
+
+    bool? walkMicEnabled,
+    bool? walkCamEnabled,
   }) {
     return AppSettings(
       twitchUsername: twitchUsername ?? this.twitchUsername,
@@ -273,6 +289,9 @@ class AppSettings {
       shoutoutUsers: shoutoutUsers ?? this.shoutoutUsers,
       savedChannels: savedChannels ?? this.savedChannels,
       savedMessages: savedMessages ?? this.savedMessages,
+
+      walkMicEnabled: walkMicEnabled ?? this.walkMicEnabled,
+      walkCamEnabled: walkCamEnabled ?? this.walkCamEnabled,
     );
   }
 
@@ -325,6 +344,9 @@ class AppSettings {
       'shoutoutUsers': shoutoutUsers,
       'savedChannels': savedChannels,
       'savedMessages': savedMessages,
+
+      'walkMicEnabled': walkMicEnabled,
+      'walkCamEnabled': walkCamEnabled,
     };
   }
 
@@ -338,7 +360,7 @@ class AppSettings {
       ttsEnabled: json['ttsEnabled'] as bool? ?? true,
       autoTranslateEnabled: json['autoTranslateEnabled'] as bool? ?? true,
       autoTranslateToChannel: json['autoTranslateToChannel'] as bool? ?? false,
-      deleteBangCommands: json['deleteBangCommands'] as bool? ?? false,
+      deleteBangCommands: json['deleteBangCommands'] as bool? ?? true,
       allowEveryone: json['allowEveryone'] as bool? ?? true,
       allowMods: json['allowMods'] as bool? ?? true,
       allowVips: json['allowVips'] as bool? ?? true,
@@ -404,6 +426,9 @@ class AppSettings {
               ?.map((e) => e.toString())
               .toList() ??
           const [],
+
+      walkMicEnabled: json['walkMicEnabled'] as bool? ?? false,
+      walkCamEnabled: json['walkCamEnabled'] as bool? ?? false,
     );
   }
 

@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
-
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/app_settings.dart';
 import '../models/log_entry.dart';
 import '../models/twitch_message.dart';
@@ -10,10 +10,11 @@ import '../services/escena_server_client.dart';
 import '../services/obs_websocket_client.dart';
 import '../services/overlay_server.dart';
 import '../services/speech_service.dart';
-import '../services/translation_service.dart';
 import '../services/tts_service.dart';
+import '../services/translation_service.dart';
 import '../services/twitch_auth_service.dart';
 import '../services/twitch_irc_client.dart';
+import '../services/walk_link_service.dart';
 import '../utils/emote_utils.dart';
 import '../utils/rate_limiter.dart';
 import '../utils/similarity_filter.dart';
@@ -34,7 +35,23 @@ class AppController extends ChangeNotifier {
   final TtsService _tts = TtsService();
   final SpeechService _speech = SpeechService();
 
+  /// Modo paseo (paso 3): enlace WebRTC P2P hacia directo/public/walk.html.
+  /// Se inicializa en `_init()` con la URL base del servidor de escenas.
+  WalkLinkService? _walkLink;
+  WalkLinkService get walkLink {
+    final w = _walkLink;
+    if (w == null) {
+      throw StateError(
+        'AppController.walkLink accessed before _init() completed.',
+      );
+    }
+    return w;
+  }
 
+  /// SharedPreferences sueltas del modo paseo, separadas de
+  /// SettingsController para inyectar valores en pruebas sin tocar
+  /// AppSettings (que está serializado en JSON dentro del mismo blob).
+  SharedPreferences? _walkPrefs;
 
   final OverlayServer _overlayServer = OverlayServer();
   bool _authLoading = false;
@@ -102,6 +119,7 @@ class AppController extends ChangeNotifier {
   final List<LogEntry> _logs = [];
   bool _connected = false;
   bool _initialized = false;
+  bool get isInitialized => _initialized;
   bool _speechInitialized = false;
   Future<void> _messageQueue = Future<void>.value();
 
@@ -165,7 +183,18 @@ class AppController extends ChangeNotifier {
     _twitch.states.listen(_handleConnectionState);
     _twitch.messages.listen(_handleChatMessage);
     await _loadVoices();
+    // Modo paseo: cargar prefs sueltas y crear servicio de enlace.
+    _walkPrefs = await SharedPreferences.getInstance();
     _initialized = true;
+    // Modo paseo: instanciar el servicio de enlace ANTES del notify
+    // para que `_onSettingsChanged` lo encuentre ya creado cuando
+    // propague `walkMicEnabled` / `walkCamEnabled` desde los ajustes.
+    _walkLink = WalkLinkService(initialServerBaseUrl: settings.scenesServerBaseUrl)
+      ..addListener(notifyListeners);
+    // SettingsController.load() puede haber notificado antes de que
+    // AppController tuviera listener adjunto: releer los ajustes y
+    // empujar al servicio de paseo explícitamente.
+    _propagarAjustesAWalkLink();
     notifyListeners();
     unawaited(_conectarObsSiHaceFalta());
   }
@@ -299,8 +328,8 @@ class AppController extends ChangeNotifier {
     _messageQueue = _messageQueue.then((_) => _processChatMessage(message));
   }
 
-  // Bots conocidos de Twitch que nunca deben leerse por TTS
-  static const _knownBots = {
+  // Lista predeterminada de bots y usuarios silenciados
+  static const defaultIgnoredUsers = {
     'streamelements',
     'nightbot',
     'moobot',
@@ -320,15 +349,37 @@ class AppController extends ChangeNotifier {
     'streamcaptainbot',
     'kofistreambot',
     'ko_fi',
+    'pepitoelpapas',
   };
+
+  final Set<String> _ignoredUsers = Set<String>.from(defaultIgnoredUsers);
+
+  Set<String> get ignoredUsers => Set.unmodifiable(_ignoredUsers);
+
+  void ignoreUser(String username) {
+    if (username.trim().isNotEmpty) {
+      _ignoredUsers.add(username.trim().toLowerCase());
+      notifyListeners();
+    }
+  }
+
+  void unignoreUser(String username) {
+    if (_ignoredUsers.remove(username.trim().toLowerCase())) {
+      notifyListeners();
+    }
+  }
+
+  bool isUserIgnored(String username) {
+    return _ignoredUsers.contains(username.trim().toLowerCase());
+  }
 
   Future<void> _processChatMessage(TwitchChatMessage message) async {
     if (!settings.ttsEnabled) {
       return;
     }
 
-    // Ignorar bots conocidos (comparación case-insensitive)
-    if (_knownBots.contains(message.username.toLowerCase())) {
+    // Ignorar si está en la lista negra (se puede eliminar de la lista para escucharlo)
+    if (isUserIgnored(message.username)) {
       return;
     }
 
@@ -362,7 +413,8 @@ class AppController extends ChangeNotifier {
       return; // Fin de procesamiento para el comando
     }
 
-    if (settings.deleteBangCommands && message.message.startsWith('!')) {
+    final trimmedMessage = message.message.trim();
+    if (settings.deleteBangCommands && (trimmedMessage.startsWith('!') || trimmedMessage.startsWith('/'))) {
       return;
     }
 
@@ -660,7 +712,46 @@ class AppController extends ChangeNotifier {
       stopSpeech();
     }
     unawaited(_conectarObsSiHaceFalta());
+    _propagarAjustesAWalkLink();
     notifyListeners();
+  }
+
+  /// Empuja los ajustes del modo paseo al servicio de enlace. Idempotente:
+  /// solo cambia los interruptores si difieren del estado actual del servicio.
+  void _propagarAjustesAWalkLink() {
+    final walk = _walkLink;
+    if (walk == null) return;
+    walk.serverBaseUrl = settings.scenesServerBaseUrl;
+    if (settings.walkMicEnabled != walk.micEnabled) {
+      unawaited(walk.setMicEnabled(settings.walkMicEnabled));
+    }
+    if (settings.walkCamEnabled != walk.camEnabled) {
+      unawaited(walk.setCamEnabled(settings.walkCamEnabled));
+    }
+    // sessionId vive en una key de SharedPreferences aparte para poder
+    // inyectarlo en pruebas sin tocar AppSettings.
+    unawaited(walk.setSessionId(_walkSessionIdDePrefs()));
+  }
+
+  /// Cambia y persiste el ID de sesión del modo paseo.
+  Future<void> setWalkSessionId(String? value) async {
+    final clean = (value ?? '').trim();
+    if (clean.isEmpty) {
+      await _walkPrefs?.remove('walk_session_id');
+      await _walkPrefs?.remove('flutter.walk_session_id');
+      await _walkLink?.setSessionId(null);
+    } else {
+      await _walkPrefs?.setString('walk_session_id', clean);
+      await _walkLink?.setSessionId(clean);
+    }
+    notifyListeners();
+  }
+
+  String? _walkSessionIdDePrefs() {
+    final raw = _walkPrefs?.getString('walk_session_id') ??
+        _walkPrefs?.getString('flutter.walk_session_id');
+    if (raw == null || raw.trim().isEmpty) return null;
+    return raw.trim();
   }
 
   /// Resuelve el idioma objetivo para traducción.
@@ -723,6 +814,7 @@ class AppController extends ChangeNotifier {
     _tts.stop();
     _overlayServer.stop();
     _obsClient?.desconectar();
+    unawaited(_walkLink?.dispose());
     super.dispose();
   }
 }

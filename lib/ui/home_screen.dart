@@ -16,6 +16,7 @@ import 'widgets/settings_field.dart';
 import 'widgets/status_pill.dart';
 import 'widgets/stream_deck_card.dart';
 import 'widgets/support_banner_card.dart';
+import 'widgets/walk_link_card.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -123,6 +124,8 @@ class _HomeScreenState extends State<HomeScreen> {
               activeContent = Column(
                 children: [
                   ObsScenesCard(appController: appController),
+                  const SizedBox(height: 16),
+                  WalkLinkCard(appController: appController),
                   const SizedBox(height: 16),
                   const StreamDeckCard(),
                 ],
