@@ -281,6 +281,15 @@ class RemoteStudioController extends ChangeNotifier {
     final now = msg.timestamp;
     final cleanPlatform = platform.toLowerCase().trim();
     final userId = CommunityUser.buildId(cleanPlatform, msg.username);
+    final effectiveMsgId = msg.id.isNotEmpty
+        ? msg.id
+        : '${cleanPlatform}_${userId}_${msg.message}_${now.millisecondsSinceEpoch}';
+
+    // Evitar procesar mensajes duplicados (mismo ID de mensaje ya ingestado)
+    if (_recentChatMessages.any((m) => m.id == effectiveMsgId)) {
+      return;
+    }
+
     final timeStr = _formatTime(now);
     final existing = _users[userId];
 
@@ -324,7 +333,7 @@ class RemoteStudioController extends ChangeNotifier {
     _dirtyUserIds.add(userId);
 
     final communityMsg = CommunityMessage(
-      id: msg.id.isNotEmpty ? msg.id : '${now.microsecondsSinceEpoch}',
+      id: effectiveMsgId,
       usuarioId: userId,
       plataforma: cleanPlatform,
       usuario: updatedUser.usuario,

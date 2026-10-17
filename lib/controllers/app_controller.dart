@@ -269,26 +269,33 @@ class AppController extends ChangeNotifier {
     _onSettingsChanged();
   }
 
+  bool _connecting = false;
+
   Future<void> connect() async {
-    if (_connected) {
+    if (_connected || _connecting) {
       return;
     }
-    if (settings.twitchOauthToken.trim().isEmpty) {  
-      _addLog(
-        LogLevel.warning,
-        'OAuth token is empty. Twitch may reject login.',
+    _connecting = true;
+    try {
+      if (settings.twitchOauthToken.trim().isEmpty) {  
+        _addLog(
+          LogLevel.warning,
+          'OAuth token is empty. Twitch may reject login.',
+        );
+      }
+      _addLog(LogLevel.info, 'Connecting to Twitch IRC...');
+
+      await _twitch.connect(
+        username: settings.twitchUsername,
+        oauthToken: settings.twitchOauthToken,
+        channel: settings.twitchChannel,
       );
-    }
-    _addLog(LogLevel.info, 'Connecting to Twitch IRC...');
 
-    await _twitch.connect(
-      username: settings.twitchUsername,
-      oauthToken: settings.twitchOauthToken,
-      channel: settings.twitchChannel,
-    );
-
-    if (settings.useSpeechToText) {
-      await startSpeech();
+      if (settings.useSpeechToText) {
+        await startSpeech();
+      }
+    } finally {
+      _connecting = false;
     }
   }
 
@@ -408,7 +415,26 @@ class AppController extends ChangeNotifier {
   }
 
 
+  final List<String> _recentIncomingMessageIds = [];
+
+  bool _isDuplicateIncomingMessage(TwitchChatMessage message) {
+    final id = message.id.isNotEmpty
+        ? message.id
+        : '${message.username}_${message.message}_${message.timestamp.millisecondsSinceEpoch}';
+    if (_recentIncomingMessageIds.contains(id)) {
+      return true;
+    }
+    _recentIncomingMessageIds.add(id);
+    if (_recentIncomingMessageIds.length > 200) {
+      _recentIncomingMessageIds.removeAt(0);
+    }
+    return false;
+  }
+
   void _handleChatMessage(TwitchChatMessage message) {
+    if (_isDuplicateIncomingMessage(message)) {
+      return;
+    }
     _remoteStudioController?.ingestLiveChatMessage(message);
     _messageQueue = _messageQueue.then((_) => _processChatMessage(message));
   }
@@ -584,7 +610,13 @@ class AppController extends ChangeNotifier {
         }
 
         if (settings.autoTranslateToChannel) {
-          await _sendTranslationToChat(translated);
+          final isFromSelf = message.username.toLowerCase().trim() ==
+              settings.twitchUsername.toLowerCase().trim();
+          final isSameText =
+              translated.trim().toLowerCase() == text.trim().toLowerCase();
+          if (!isFromSelf && !isSameText) {
+            await _sendTranslationToChat(translated);
+          }
         }
       } catch (error) {
         _addLog(LogLevel.error, 'Translation error: $error');
@@ -686,17 +718,33 @@ class AppController extends ChangeNotifier {
 
   Future<void> _sendTranslationToChat(String message) => sendChatMessage(message);
 
+  String _lastSentMessage = '';
+  DateTime _lastSentMessageAt = DateTime.fromMillisecondsSinceEpoch(0);
+
   /// Envía un mensaje arbitrario al chat de Twitch reutilizando la conexión
   /// IRC ya activa y el limitador de tasa compartido. No hace nada si no hay
-  /// conexión.
-  Future<void> sendChatMessage(String message) async {
+  /// conexión. Previene dobles envíos inmediatos por pulsación accidental repetida.
+  Future<void> sendChatMessage(String message, {bool force = false}) async {
     if (!_connected) {
       return;
     }
+    final clean = message.trim();
+    if (clean.isEmpty) {
+      return;
+    }
+    final now = DateTime.now();
+    if (!force &&
+        _lastSentMessage == clean &&
+        now.difference(_lastSentMessageAt) < const Duration(milliseconds: 1500)) {
+      return;
+    }
+    _lastSentMessage = clean;
+    _lastSentMessageAt = now;
+
     await _chatLimiter.waitForSlot();
     await _twitch.sendMessage(
       channel: settings.twitchChannel,
-      message: message,
+      message: clean,
     );
   }
 
@@ -733,6 +781,9 @@ class AppController extends ChangeNotifier {
     );
   }
 
+  String _lastDictatedText = '';
+  DateTime _lastDictatedAt = DateTime.fromMillisecondsSinceEpoch(0);
+
   Future<void> _handleSpeechResult(SpeechResult result) async {
     if (!result.isFinal) {
       return;
@@ -742,6 +793,15 @@ class AppController extends ChangeNotifier {
     if (text.isEmpty) {
       return;
     }
+
+    final now = DateTime.now();
+    if (_lastDictatedText == text &&
+        now.difference(_lastDictatedAt) < const Duration(seconds: 3)) {
+      // Ignorar resultado final duplicado emitido por el reconocedor de voz
+      return;
+    }
+    _lastDictatedText = text;
+    _lastDictatedAt = now;
 
     final poofRegex = RegExp(settings.poofPattern, caseSensitive: false);
     final banRegex = RegExp(settings.banPattern, caseSensitive: false);
@@ -770,24 +830,31 @@ class AppController extends ChangeNotifier {
     }
 
     if (settings.sendDictationToChannel) {
-      var outgoing = text;
-      final targetLang = _resolveTargetLang();
-      if (settings.autoTranslateEnabled && targetLang != 'auto') {
+      // Replies go out in Spanish plus every language in
+      // _idiomasRespuestaDirecto, so foreign viewers read them in their own
+      // language without changing the listening language.
+      final translator = TranslationService(
+        customBaseUrl: settings.translationApiBaseUrl,
+        apiKey: settings.translationApiKey,
+      );
+      final partes = <String>[text];
+      for (final idioma in _idiomasRespuestaDirecto) {
         try {
-          final translator = TranslationService(
-            customBaseUrl: settings.translationApiBaseUrl,
-            apiKey: settings.translationApiKey,
-          );
           final translated = await translator.translate(
             text: text,
-            source: settings.sourceLanguage,
-            target: targetLang,
+            source: 'es',
+            target: idioma,
           );
-          if (translated.trim().toLowerCase() != text.trim().toLowerCase()) {
-            outgoing = '$text | $translated';
+          if (translated.trim().isNotEmpty &&
+              translated.trim().toLowerCase() != text.trim().toLowerCase()) {
+            partes.add('${idioma.toUpperCase()}: ${translated.trim()}');
           }
-        } catch (_) {}
+        } catch (error) {
+          _addLog(LogLevel.error, 'Reply translation ($idioma) error: $error');
+        }
       }
+      var outgoing = partes.join(' | ');
+      if (outgoing.length > 480) outgoing = outgoing.substring(0, 480);
       await _sendTranslationToChat(outgoing);
     }
   }
@@ -870,6 +937,9 @@ class AppController extends ChangeNotifier {
   /// Resuelve el idioma objetivo para traducción.
   /// Si ambos targetLanguage y systemLanguage son 'auto', usa el locale del
   /// dispositivo para que la traducción funcione sin configuración manual.
+  /// Languages added to every dictated reply sent to the chat.
+  static const List<String> _idiomasRespuestaDirecto = ['en', 'ru'];
+
   String _resolveTargetLang() {
     if (settings.targetLanguage != 'auto') return settings.targetLanguage;
     if (settings.systemLanguage != 'auto') return settings.systemLanguage;

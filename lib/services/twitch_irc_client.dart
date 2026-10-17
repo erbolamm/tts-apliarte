@@ -38,11 +38,12 @@ class TwitchIrcClient {
     final uri = Uri.parse('wss://irc-ws.chat.twitch.tv:443');
     _channel = WebSocketChannel.connect(uri);
 
+    final cleanChannel = normalizeChannel(channel);
     final token = _normalizeToken(oauthToken);
     _sendRaw('PASS $token');
     _sendRaw('NICK $username');
     _sendRaw('CAP REQ :twitch.tv/tags twitch.tv/commands twitch.tv/membership');
-    _sendRaw('JOIN #$channel');
+    _sendRaw('JOIN #$cleanChannel');
 
     _connected = true;
     _stateController.add(TwitchConnectionState(connected: true));
@@ -55,7 +56,7 @@ class TwitchIrcClient {
           if (line.isEmpty) {
             continue;
           }
-          _handleLine(line, channel);
+          _handleLine(line, cleanChannel);
         }
       },
       onError: (error) {
@@ -96,7 +97,16 @@ class TwitchIrcClient {
     if (!_connected) {
       return;
     }
-    _sendRaw('PRIVMSG #$channel :$message');
+    final cleanChannel = normalizeChannel(channel);
+    _sendRaw('PRIVMSG #$cleanChannel :$message');
+  }
+
+  static String normalizeChannel(String raw) {
+    var clean = raw.trim();
+    while (clean.startsWith('#') || clean.startsWith('@')) {
+      clean = clean.substring(1).trim();
+    }
+    return clean;
   }
 
   void _handleLine(String line, String channel) {

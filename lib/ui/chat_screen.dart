@@ -137,6 +137,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           final msg = messages[index];
                           final projected = studio.isMessageProjected(msg);
                           return Container(
+                            key: ValueKey(msg.id),
                             margin: const EdgeInsets.only(bottom: 8),
                             padding: const EdgeInsets.symmetric(
                               horizontal: 12,

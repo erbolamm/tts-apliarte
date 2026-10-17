@@ -88,6 +88,31 @@ void main() {
       expect(studio.isMessageProjected(history.first), isTrue);
     });
 
+    test('Deduplicación: mensajes con ID idéntico se ignoran en _recentChatMessages e historial', () {
+      final studio = RemoteStudioController();
+
+      final msg = _fakeMessage(
+        id: 'msg_dup_1',
+        username: 'espectador_repetido',
+        text: '¡Hola a todos en el directo!',
+      );
+
+      studio.ingestLiveChatMessage(msg);
+      expect(studio.recentChatMessages.length, 1);
+      final user = studio.getUser('twitch', 'espectador_repetido');
+      expect(user, isNotNull);
+      expect(user!.totalMensajes, 1);
+      expect(studio.getMessagesForUser(user.id).length, 1);
+
+      // Segunda ingesta del mismo mensaje (retransmisión o eco)
+      studio.ingestLiveChatMessage(msg);
+
+      // No debe duplicarse en recentChatMessages, ni en el historial del usuario, ni incrementar totalMensajes
+      expect(studio.recentChatMessages.length, 1);
+      expect(studio.getUser('twitch', 'espectador_repetido')!.totalMensajes, 1);
+      expect(studio.getMessagesForUser(user.id).length, 1);
+    });
+
     test('Extracción en memoria de comandos !sms y !contexto desde el chat en vivo', () {
       final repo = CommunityRepository(channelId: 'apliarte');
       final studio = RemoteStudioController(repository: repo);
