@@ -88,13 +88,26 @@ class OverlayServer {
         }
       } catch (_) {}
 
-      _server = await HttpServer.bind(InternetAddress.anyIPv4, port);
+      try {
+        _server = await HttpServer.bind(
+          InternetAddress.anyIPv4,
+          port,
+          shared: true,
+        );
+      } catch (_) {
+        _server = await HttpServer.bind(
+          InternetAddress.loopbackIPv4,
+          port,
+          shared: true,
+        );
+      }
       _running = true;
       _server!.listen(_handleRequest, onError: (_) {});
     } catch (_) {
       _running = false;
     }
   }
+
 
   Future<void> stop() async {
     for (final ws in List<WebSocket>.from(_clients)) {
@@ -136,7 +149,18 @@ class OverlayServer {
     _broadcast({'type': 'twitch_state', 'connected': connected});
   }
 
+  /// Emite eventos del Estudio Remoto (`featured_message`, `featured_sms`,
+  /// `stream_context`, `overlay_theme`) hacia los overlays OBS conectados (:7979/ws).
+  void emitStudioEvent(String type, Map<String, dynamic> payload) {
+    _broadcast({
+      'type': type,
+      ...payload,
+      'ts': DateTime.now().millisecondsSinceEpoch,
+    });
+  }
+
   void _broadcast(Map<String, dynamic> payload) {
+
     if (_clients.isEmpty) return;
     final data = jsonEncode(payload);
     for (final ws in List<WebSocket>.from(_clients)) {

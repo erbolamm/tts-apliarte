@@ -77,13 +77,54 @@ class TtsService {
     String? voice,
     String? language,
     double? pitch,
+    double? rate,
+    String? prefix,
+    String? suffix,
   }) async {
+    final formattedText = _formatWithAffixes(text, prefix: prefix, suffix: suffix);
+    if (formattedText.isEmpty) return;
     _queue.add(
-      _TtsJob(text: text, voice: voice, language: language, pitch: pitch),
+      _TtsJob(
+        text: formattedText,
+        voice: voice,
+        language: language,
+        pitch: pitch,
+        rate: rate,
+        prefix: prefix,
+        suffix: suffix,
+      ),
     );
     if (!_busy) {
       _processQueue();
     }
+  }
+
+  Future<void> speakTest({
+    required String text,
+    String? voice,
+    String? language,
+    double? pitch,
+    double? rate,
+    String? prefix,
+    String? suffix,
+  }) {
+    return enqueue(
+      text: text,
+      voice: voice,
+      language: language,
+      pitch: pitch,
+      rate: rate,
+      prefix: prefix,
+      suffix: suffix,
+    );
+  }
+
+  String _formatWithAffixes(String text, {String? prefix, String? suffix}) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return '';
+    final pre = prefix ?? '';
+    final suf = suffix ?? '';
+    return '$pre$trimmed$suf'.trim();
   }
 
   Future<void> stop() async {
@@ -114,8 +155,9 @@ class TtsService {
       await _tts.setVoice(voiceMap);
     }
 
-    // Se fija siempre, incluso al valor por defecto: si no se reinicia aquí,
-    // el pitch de un job anterior se queda pegado en el motor para el siguiente.
+    // Se fija siempre rate y pitch en cada trabajo para que no queden pegados
+    // en el motor nativo para el siguiente mensaje (Argon M2-C).
+    await _tts.setSpeechRate((job.rate ?? 0.5).clamp(0.1, 1.0));
     await _tts.setPitch(job.pitch ?? 1.0);
 
     await _tts.speak(job.text);
@@ -128,10 +170,17 @@ class _TtsJob {
     required this.voice,
     required this.language,
     required this.pitch,
+    this.rate,
+    this.prefix,
+    this.suffix,
   });
 
   final String text;
   final String? voice;
   final String? language;
   final double? pitch;
+  final double? rate;
+  final String? prefix;
+  final String? suffix;
 }
+

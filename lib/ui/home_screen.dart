@@ -10,14 +10,19 @@ import '../utils/app_strings.dart';
 import 'settings/advanced_settings_screens.dart';
 import 'widgets/apliarte_drawer.dart';
 import 'widgets/command_buttons_card.dart';
+import 'widgets/community_crm_card.dart';
+import 'widgets/ignored_users_card.dart';
+import 'widgets/live_projection_banner.dart';
 import 'widgets/obs_scenes_card.dart';
+import 'widgets/obs_sources_card.dart';
+import 'widgets/screen_off_overlay.dart';
 import 'widgets/section_card.dart';
 import 'widgets/settings_field.dart';
+import 'widgets/sms_inbox_card.dart';
 import 'widgets/status_pill.dart';
+import 'widgets/stream_context_card.dart';
 import 'widgets/support_banner_card.dart';
 import 'widgets/walk_link_card.dart';
-import 'widgets/ignored_users_card.dart';
-import 'widgets/screen_off_overlay.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -123,16 +128,21 @@ class _HomeScreenState extends State<HomeScreen> {
           final logs = _buildLogs(appController, settings.uiLanguage);
 
           // Vista activa del rail:
-          // 0: 🎬 Escenas (OBS WebSocket + Stream Deck)
+          // 0: 🎬 Escenas (OBS WebSocket + Fuentes OBS + Contexto Directo + WalkLink)
           // 1: 🎙️ Micrófono / Dictado
           // 2: 🌐 URL OBS (Browser Source)
-          // 3: ⚡ Comandos (CommandButtonsCard)
+          // 3: ⚡ Comandos (CommandButtonsCard + IgnoredUsersCard)
+          // 4: 👥 Comunidad CRM (CommunityCrmCard + SmsInboxCard)
           Widget activeContent;
           switch (_selectedRailIndex) {
             case 0:
               activeContent = Column(
                 children: [
                   ObsScenesCard(appController: appController),
+                  const SizedBox(height: 16),
+                  const ObsSourcesCard(),
+                  const SizedBox(height: 16),
+                  const StreamContextCard(),
                   const SizedBox(height: 16),
                   WalkLinkCard(appController: appController),
                 ],
@@ -152,6 +162,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 appController: appController,
               );
               break;
+            case 4:
+              activeContent = const Column(
+                children: [
+                  CommunityCrmCard(),
+                  SizedBox(height: 16),
+                  SmsInboxCard(),
+                ],
+              );
+              break;
             case 3:
             default:
               activeContent = const Column(
@@ -168,7 +187,7 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               // ── Rail lateral de navegación ──────────────────────────────
               NavigationRail(
-                selectedIndex: _selectedRailIndex,
+                selectedIndex: _selectedRailIndex.clamp(0, 4),
                 onDestinationSelected: (index) {
                   setState(() => _selectedRailIndex = index);
                   HomeScreen.railIndexNotifier.value = index;
@@ -195,6 +214,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     selectedIcon: Icon(Icons.bolt),
                     label: Text('Comandos'),
                   ),
+                  NavigationRailDestination(
+                    icon: Icon(Icons.people_outline),
+                    selectedIcon: Icon(Icons.people),
+                    label: Text('Comunidad'),
+                  ),
                 ],
               ),
               const VerticalDivider(thickness: 1, width: 1),
@@ -205,6 +229,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
+                    // ── Banner de proyección en directo en OBS ──
+                    const LiveProjectionBanner(),
                     // ── Conexión y apoyo: fijos siempre visibles arriba ──
                     _ConnectionCard(
                       appController: appController,
@@ -219,6 +245,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     // ── Vista activa del rail ────────────────────────────
                     activeContent,
+
 
                     // ── Accesos directos a configuración ─────────────────
                     const SizedBox(height: 24),

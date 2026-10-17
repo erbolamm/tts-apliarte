@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import 'controllers/app_controller.dart';
+import 'controllers/remote_studio_controller.dart';
 import 'controllers/settings_controller.dart';
 import 'ui/home_screen.dart';
 
@@ -14,18 +15,24 @@ class TtsApliArteApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => SettingsController()..load()),
-        ChangeNotifierProxyProvider<SettingsController, AppController>(
+        ChangeNotifierProvider(
+          create: (_) => RemoteStudioController()..loadFromRepository(),
+        ),
+        ChangeNotifierProxyProvider2<SettingsController, RemoteStudioController,
+            AppController>(
           create: (context) => AppController(
             settingsController: context.read<SettingsController>(),
-          ),
-          update: (context, settings, controller) {
+          )..attachRemoteStudio(context.read<RemoteStudioController>()),
+          update: (context, settings, studio, controller) {
             controller ??= AppController(settingsController: settings);
             controller.attachSettings(settings);
+            controller.attachRemoteStudio(studio);
             return controller;
           },
         ),
       ],
       child: Consumer<SettingsController>(
+
         builder: (context, settings, _) {
           final baseTheme = ThemeData(
             colorScheme: ColorScheme.fromSeed(

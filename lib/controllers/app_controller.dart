@@ -4,6 +4,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/app_settings.dart';
+import '../models/community_models.dart';
 import '../models/log_entry.dart';
 import '../models/twitch_message.dart';
 import '../services/escena_server_client.dart';
@@ -21,7 +22,9 @@ import '../utils/emote_utils.dart';
 import '../utils/rate_limiter.dart';
 import '../utils/similarity_filter.dart';
 import '../utils/voice_pitch.dart';
+import 'remote_studio_controller.dart';
 import 'settings_controller.dart';
+
 
 class AppController extends ChangeNotifier {
   AppController({
@@ -70,9 +73,28 @@ class AppController extends ChangeNotifier {
   Future<void> exitScreenOffMode() => _screenOff.exitScreenOffMode();
 
   final OverlayServer _overlayServer = OverlayServer();
+  OverlayServer get overlayServer => _overlayServer;
+  TtsService get ttsService => _tts;
   bool _authLoading = false;
 
+  RemoteStudioController? _remoteStudioController;
+  RemoteStudioController? get remoteStudio => _remoteStudioController;
+
+  void attachRemoteStudio(RemoteStudioController studio) {
+    _remoteStudioController = studio;
+    final channel = settings.twitchChannel.isNotEmpty
+        ? settings.twitchChannel
+        : settings.twitchUsername;
+    studio.attachServices(
+      overlayServer: _overlayServer,
+      obsClient: _obsClient,
+      channelId: channel,
+      activeObsScene: _obsEscenas.isNotEmpty ? _obsEscenas.first.name : null,
+    );
+  }
+
   ObsWebSocketClient? _obsClient;
+  ObsWebSocketClient? get obsClient => _obsClient;
   String _obsConectadoA = '';
   bool _obsConectado = false;
   List<ObsScene> _obsEscenas = [];
@@ -111,6 +133,14 @@ class AppController extends ChangeNotifier {
     final ok = await cliente.conectar();
     _obsConectado = ok;
     _obsEscenas = ok ? await cliente.obtenerEscenas() : [];
+    final firstScene = _obsEscenas.isNotEmpty ? _obsEscenas.first.name : '';
+    _remoteStudioController?.attachServices(
+      obsClient: _obsClient,
+      activeObsScene: firstScene,
+    );
+    if (ok && firstScene.isNotEmpty) {
+      unawaited(_remoteStudioController?.refreshObsSources(sceneName: firstScene));
+    }
     notifyListeners();
   }
 
@@ -122,8 +152,14 @@ class AppController extends ChangeNotifier {
     if (!_obsConectado || _obsClient == null) return;
     await _obsClient!.cambiarEscena(nombre);
     _obsEscenas = await _obsClient!.obtenerEscenas();
+    _remoteStudioController?.attachServices(
+      obsClient: _obsClient,
+      activeObsScene: nombre,
+    );
+    unawaited(_remoteStudioController?.refreshObsSources(sceneName: nombre));
     notifyListeners();
   }
+
 
   final SimilarityFilter _userSimilarity = SimilarityFilter();
   final SimilarityFilter _globalSimilarity = SimilarityFilter();
@@ -322,6 +358,25 @@ class AppController extends ChangeNotifier {
     );
   }
 
+  /// Prueba una configuración de voz específica desde la ficha CRM del espectador.
+  Future<void> speakPreviewWithConfig(
+    String text,
+    TtsVoiceConfig config,
+  ) async {
+    final transformed = TtsVoiceCatalog.applyPresetToText(text, config);
+    if (transformed.isEmpty) return;
+    final defaultVoice = VoiceOption.fromStorage(settings.systemVoice, _voices);
+    await _tts.speakTest(
+      text: transformed,
+      voice: config.voiceName ?? defaultVoice?.name,
+      language: config.lang.isNotEmpty
+          ? config.lang
+          : (defaultVoice?.locale ?? _mapLanguageToLocale(settings.systemLanguage)),
+      pitch: config.pitch,
+      rate: config.rate,
+    );
+  }
+
   void _handleConnectionState(TwitchConnectionState state) {
     _connected = state.connected;
     _overlayServer.pushTwitchState(connected: state.connected);
@@ -354,6 +409,7 @@ class AppController extends ChangeNotifier {
 
 
   void _handleChatMessage(TwitchChatMessage message) {
+    _remoteStudioController?.ingestLiveChatMessage(message);
     _messageQueue = _messageQueue.then((_) => _processChatMessage(message));
   }
 
@@ -415,8 +471,12 @@ class AppController extends ChangeNotifier {
       return;
     }
 
-    // Ignorar si está en la lista negra (se puede eliminar de la lista para escucharlo)
+    // Ignorar si está en la lista negra o silenciado/baneado en el CRM de Comunidad
     if (isUserIgnored(message.username)) {
+      return;
+    }
+    if (_remoteStudioController?.isUserSilencedOrBanned('twitch', message.username) ==
+        true) {
       return;
     }
 
@@ -544,8 +604,23 @@ class AppController extends ChangeNotifier {
 
     final voice = VoiceOption.fromStorage(settings.systemVoice, _voices);
     final voiceLanguage = voice?.locale;
-    
-    // Si el usuario guardó un acento con !speak, sobrescribe el idioma por defecto
+
+    // 1. Priorizar configuración de voz de la ficha CRM (RemoteStudioController)
+    final crmVoiceConfig =
+        _remoteStudioController?.resolveVoiceConfigForUser('twitch', message.username);
+    if (crmVoiceConfig != null) {
+      final transformedText = TtsVoiceCatalog.applyPresetToText(text, crmVoiceConfig);
+      await _tts.enqueue(
+        text: transformedText,
+        voice: crmVoiceConfig.voiceName ?? voice?.name,
+        language: crmVoiceConfig.lang.isNotEmpty ? crmVoiceConfig.lang : voiceLanguage,
+        pitch: crmVoiceConfig.pitch,
+        rate: crmVoiceConfig.rate,
+      );
+      return;
+    }
+
+    // 2. Fallback: si el usuario guardó un acento con !speak, sobrescribe el idioma por defecto
     final userSpecificData = settings.userVoices[message.username]?.split(':');
     final userSpecificLocale = userSpecificData?.isNotEmpty == true ? userSpecificData![0] : null;
     final userSpecificIndex = userSpecificData != null && userSpecificData.length > 1 
@@ -607,6 +682,7 @@ class AppController extends ChangeNotifier {
       pitch: userPitch,
     );
   }
+
 
   Future<void> _sendTranslationToChat(String message) => sendChatMessage(message);
 

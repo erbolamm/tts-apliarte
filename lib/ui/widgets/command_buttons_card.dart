@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../controllers/app_controller.dart';
+import '../../controllers/remote_studio_controller.dart';
 import '../../controllers/settings_controller.dart';
+import '../../models/community_models.dart';
 import '../../utils/app_strings.dart';
 import 'section_card.dart';
 
@@ -13,11 +15,11 @@ final GlobalKey comandosUsuariosCanalesKey = GlobalKey();
 
 /// Botonera de comandos rápidos para el chat de Twitch.
 ///
-/// Dos listas editables y persistentes (menciones y shoutouts). Cada entrada
-/// se muestra como un botón/chip: pulsarlo manda el mensaje correspondiente
-/// al chat en directo reutilizando [AppController.mentionUser] /
-/// [AppController.shoutoutUser], que a su vez usan la conexión IRC ya
-/// existente ([AppController.sendChatMessage]).
+/// Incluye:
+/// - Favoritos con estrella (⭐)
+/// - Asistente modal para plantillas parametrizadas (`[usuario]`, `[canal]`, `[mensaje]`)
+/// - Barra rápida de moderación (`Time Out 10m`, `Ban/Unban`, `Mute TTS`)
+/// - Menciones, shoutouts, raids y anuncios persistentes
 class CommandButtonsCard extends StatefulWidget {
   const CommandButtonsCard({super.key});
 
@@ -26,9 +28,6 @@ class CommandButtonsCard extends StatefulWidget {
 }
 
 class _CommandButtonsCardState extends State<CommandButtonsCard> {
-  /// Entrada fija de shoutout de ApliArte, creador de la app (paso 6 de la
-  /// cadena directo/tts-apliarte). No vive en `shoutoutUsers` — así no hay
-  /// forma de que la UI de borrado (`onDeleted`) la elimine por error.
   static const String _shoutoutFijoApliArte = 'apliarte';
 
   String _tipoSeleccionado = 'todos'; // 'todos' | 'usuario' | 'canal' | 'mensaje'
@@ -36,6 +35,7 @@ class _CommandButtonsCardState extends State<CommandButtonsCard> {
   final TextEditingController _shoutoutCtrl = TextEditingController();
   final TextEditingController _channelCtrl = TextEditingController();
   final TextEditingController _messageCtrl = TextEditingController();
+  final TextEditingController _modTargetCtrl = TextEditingController();
 
   @override
   void dispose() {
@@ -43,6 +43,7 @@ class _CommandButtonsCardState extends State<CommandButtonsCard> {
     _shoutoutCtrl.dispose();
     _channelCtrl.dispose();
     _messageCtrl.dispose();
+    _modTargetCtrl.dispose();
     super.dispose();
   }
 
@@ -155,11 +156,155 @@ class _CommandButtonsCardState extends State<CommandButtonsCard> {
     );
   }
 
+  Future<void> _openParameterizedWizard(
+    BuildContext context,
+    ParameterizedCommandTemplate tpl,
+    AppController ctrl,
+    RemoteStudioController? studio,
+    AppStrings s,
+  ) async {
+    final needsUser = tpl.template.contains('[usuario]');
+    final needsChannel = tpl.template.contains('[canal]');
+    final needsMsg = tpl.template.contains('[mensaje]');
+
+    final userCtrl = TextEditingController(
+      text: RemoteStudioController.canonicalUsers.first,
+    );
+    final chanCtrl = TextEditingController(
+      text: RemoteStudioController.canonicalChannels.first,
+    );
+    final msgCtrl = TextEditingController(
+      text: RemoteStudioController.canonicalMessages.first,
+    );
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF0E1117),
+          title: Text('⚡ ${tpl.label}'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (needsUser) ...[
+                  TextField(
+                    controller: userCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Parámetro [usuario]',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    children: {
+                      ...RemoteStudioController.canonicalUsers,
+                      if (studio != null)
+                        ...studio.allUsers.take(4).map((u) => u.usuario),
+                    }
+                        .map(
+                          (u) => ActionChip(
+                            label: Text('@$u'),
+                            onPressed: () => userCtrl.text = u,
+                          ),
+                        )
+                        .toList(),
+                  ),
+
+                  const SizedBox(height: 12),
+                ],
+                if (needsChannel) ...[
+                  TextField(
+                    controller: chanCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Parámetro [canal]',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    children: RemoteStudioController.canonicalChannels
+                        .map(
+                          (c) => ActionChip(
+                            label: Text('#$c'),
+                            onPressed: () => chanCtrl.text = c,
+                          ),
+                        )
+                        .toList(),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                if (needsMsg) ...[
+                  TextField(
+                    controller: msgCtrl,
+                    maxLines: 2,
+                    decoration: const InputDecoration(
+                      labelText: 'Parámetro [mensaje]',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: RemoteStudioController.canonicalMessages
+                        .map(
+                          (m) => ActionChip(
+                            label: Text(
+                              m.length > 26 ? '${m.substring(0, 26)}…' : m,
+                            ),
+                            onPressed: () => msgCtrl.text = m,
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF1D9BF0),
+              ),
+              onPressed: () {
+                final resolved = tpl.template
+                    .replaceAll('[usuario]', _sanitizeUsername(userCtrl.text))
+                    .replaceAll('[canal]', _sanitizeUsername(chanCtrl.text))
+                    .replaceAll('[mensaje]', msgCtrl.text.trim())
+                    .trim();
+                Navigator.pop(ctx, resolved);
+              },
+              icon: const Icon(Icons.send, size: 16),
+              label: const Text('Enviar al chat'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result != null && result.isNotEmpty) {
+      _warnIfNotConnected(ctrl, s);
+      await ctrl.sendChatMessage(result);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final settingsController = context.watch<SettingsController>();
     final settings = settingsController.settings;
     final ctrl = context.watch<AppController>();
+    final studio = context.watch<RemoteStudioController?>();
     final s = AppStrings(settings.uiLanguage);
     final theme = Theme.of(context);
 
@@ -232,21 +377,29 @@ class _CommandButtonsCardState extends State<CommandButtonsCard> {
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
-                children: settings.mentionUsers
-                    .map(
-                      (username) => InputChip(
-                        label: Text('/shoutout $username'),
-                        tooltip: s.mentionsSectionTitle,
-                        onPressed: () {
-                          _warnIfNotConnected(ctrl, s);
-                          ctrl.mentionUser(username);
-                        },
-                        deleteIcon: const Icon(Icons.close, size: 18),
-                        onDeleted: () =>
-                            _removeMention(settingsController, username),
+                children: settings.mentionUsers.map((username) {
+                  final cmd = '/shoutout $username';
+                  final isFav = studio?.isCommandFavorite(cmd) ?? false;
+                  return InputChip(
+                    avatar: GestureDetector(
+                      onTap: () => studio?.toggleFavoriteCommand(cmd),
+                      child: Icon(
+                        isFav ? Icons.star : Icons.star_border,
+                        size: 16,
+                        color: isFav ? const Color(0xFFFFB400) : Colors.grey,
                       ),
-                    )
-                    .toList(),
+                    ),
+                    label: Text(cmd),
+                    tooltip: s.mentionsSectionTitle,
+                    onPressed: () {
+                      _warnIfNotConnected(ctrl, s);
+                      ctrl.mentionUser(username);
+                    },
+                    deleteIcon: const Icon(Icons.close, size: 18),
+                    onDeleted: () =>
+                        _removeMention(settingsController, username),
+                  );
+                }).toList(),
               ),
             const SizedBox(height: 20),
             const Divider(height: 1),
@@ -292,9 +445,19 @@ class _CommandButtonsCardState extends State<CommandButtonsCard> {
                     ctrl.shoutoutUser(_shoutoutFijoApliArte);
                   },
                 ),
-                ...settings.shoutoutUsers.map(
-                  (username) => InputChip(
-                    label: Text('!so $username'),
+                ...settings.shoutoutUsers.map((username) {
+                  final cmd = '!so $username';
+                  final isFav = studio?.isCommandFavorite(cmd) ?? false;
+                  return InputChip(
+                    avatar: GestureDetector(
+                      onTap: () => studio?.toggleFavoriteCommand(cmd),
+                      child: Icon(
+                        isFav ? Icons.star : Icons.star_border,
+                        size: 16,
+                        color: isFav ? const Color(0xFFFFB400) : Colors.grey,
+                      ),
+                    ),
+                    label: Text(cmd),
                     tooltip: s.shoutoutsSectionTitle,
                     onPressed: () {
                       _warnIfNotConnected(ctrl, s);
@@ -303,8 +466,8 @@ class _CommandButtonsCardState extends State<CommandButtonsCard> {
                     deleteIcon: const Icon(Icons.close, size: 18),
                     onDeleted: () =>
                         _removeShoutout(settingsController, username),
-                  ),
-                ),
+                  );
+                }),
               ],
             ),
             if (settings.shoutoutUsers.isEmpty) ...[
@@ -419,8 +582,148 @@ class _CommandButtonsCardState extends State<CommandButtonsCard> {
                   .toList(),
             ),
           ],
+
+          const Divider(height: 32),
+
+          // ── Favoritos con estrella ⭐ ────────────────────────────────────
+          if (studio != null && studio.favoriteCommands.isNotEmpty) ...[
+            const Text(
+              '⭐ Comandos Favoritos',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Color(0xFFFFB400),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: studio.favoriteCommands.map((cmd) {
+                return InputChip(
+                  avatar: const Icon(
+                    Icons.star,
+                    size: 16,
+                    color: Color(0xFFFFB400),
+                  ),
+                  label: Text(cmd),
+                  onPressed: () {
+                    _warnIfNotConnected(ctrl, s);
+                    ctrl.sendChatMessage(cmd);
+                  },
+                  deleteIcon: const Icon(Icons.star_outline, size: 16),
+                  onDeleted: () => studio.toggleFavoriteCommand(cmd),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // ── Plantillas Parametrizadas ([usuario], [canal], [mensaje]) ───
+          const Text(
+            '🧙‍♂️ Asistente de Comandos Parametrizados',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1D9BF0),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: RemoteStudioController.commandTemplates.map((tpl) {
+              return ActionChip(
+                avatar: const Icon(Icons.auto_fix_high, size: 16),
+                label: Text(tpl.label),
+                onPressed: () =>
+                    _openParameterizedWizard(context, tpl, ctrl, studio, s),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 16),
+
+          // ── Barra Rápida de Moderación ──────────────────────────────────
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0E1117),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0x22FFFFFF)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  '🛡️ Moderación Rápida',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFFFFB400),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _modTargetCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Usuario objetivo (@usuario)…',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.timer_outlined, size: 16),
+                      label: const Text('Time Out 10m'),
+                      onPressed: () {
+                        final target = _sanitizeUsername(_modTargetCtrl.text);
+                        if (target.isEmpty) return;
+                        _warnIfNotConnected(ctrl, s);
+                        ctrl.sendChatMessage('/timeout $target 600');
+                      },
+                    ),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.gavel, size: 16),
+                      label: const Text('Ban/Unban'),
+                      onPressed: () {
+                        final target = _sanitizeUsername(_modTargetCtrl.text);
+                        if (target.isEmpty) return;
+                        final id = CommunityUser.buildId('twitch', target);
+                        final user = studio?.getUser(id);
+                        final willBan = !(user?.baneado ?? false);
+                        studio?.toggleUserBan(id);
+                        _warnIfNotConnected(ctrl, s);
+                        ctrl.sendChatMessage(
+                          willBan ? '/ban $target' : '/unban $target',
+                        );
+                      },
+                    ),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.volume_off, size: 16),
+                      label: const Text('Mute TTS'),
+                      onPressed: () {
+                        final target = _sanitizeUsername(_modTargetCtrl.text);
+                        if (target.isEmpty) return;
+                        if (ctrl.isUserIgnored(target)) {
+                          ctrl.unignoreUser(target);
+                        } else {
+                          ctrl.ignoreUser(target);
+                        }
+                        studio?.toggleUserTtsMute(
+                          CommunityUser.buildId('twitch', target),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
+
 }
+

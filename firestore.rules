@@ -1,0 +1,255 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // This security rules file assumes the following data structures:
+    //
+    // 1. Document: channels/{channelId}/runtime/studio_state
+    //    Fields:
+    //      - featuredMessage: map | null (optional) - Active featured chat message in overlay
+    //      - featuredSms: map | null (optional) - Active featured SMS in overlay
+    //      - streamContext: string (optional, <= 300 chars) - Current stream context/topic
+    //      - overlayTheme: string (optional, in ['dark', 'light']) - Visual theme of the overlay
+    //      - activeScene: string (optional, <= 120 chars) - Currently active OBS scene
+    //      - updatedAt: timestamp | int | string (optional) - Last update timestamp
+    //
+    // 2. Collection: channels/{channelId}/usuarios/{usuarioId}
+    //    Fields:
+    //      - id: string (optional, <= 150 chars, immutable on update) - Unique user identifier
+    //      - plataforma: string (required, in ['twitch', 'youtube']) - Streaming platform
+    //      - usuario: string (required, <= 100 chars) - Platform username/handle
+    //      - nombreVisible: string (optional, <= 100 chars) - Display name
+    //      - avatarUrl: string (optional, <= 500 chars) - Profile avatar URL
+    //      - rol: string (required, in ['normal', 'vip', 'mod', 'admin']) - Community role
+    //      - esSuscriptor: bool (required) - Subscription status
+    //      - vozConfig: map | null (optional) - Custom TTS voice configuration
+    //      - notasContexto: string (optional, <= 2000 chars) - Streamer CRM notes on viewer
+    //      - sugerenciaSaludo: string (optional, <= 500 chars) - Greeting suggestion
+    //      - totalMensajes: int (optional, >= 0) - Total messages sent
+    //      - primerMensajeEn: timestamp | int | string (optional) - First message timestamp
+    //      - ultimoMensajeEn: timestamp | int | string (optional) - Last message timestamp
+    //      - actualizadoEn: timestamp | int | string (optional) - Last profile update timestamp
+    //      - ultimoTexto: string (optional, <= 1000 chars) - Last message text preview
+    //      - ultimaFechaHora: string | int | timestamp (optional, <= 60 chars if string) - Last message formatted time
+    //      - silenciadoTts: bool (optional) - Whether user is muted in TTS
+    //      - baneado: bool (optional) - Whether user is banned
+    //
+    // 3. Subcollection: channels/{channelId}/usuarios/{usuarioId}/mensajes/{mensajeId}
+    //    Fields:
+    //      - id: string (optional, <= 150 chars, immutable on update) - Message ID
+    //      - usuarioId: string (optional, <= 150 chars, immutable on update) - Parent user ID
+    //      - plataforma: string (optional, in ['twitch', 'youtube']) - Platform origin
+    //      - usuario: string (optional, <= 100 chars) - Username
+    //      - nombreVisible: string (optional, <= 100 chars) - Display name
+    //      - texto: string (required, <= 1000 chars) - Message text content
+    //      - color: string (optional, <= 30 chars) - Username hex color
+    //      - timestamp: timestamp | int | string (optional) - Message timestamp
+    //      - fechaHora: string | int | timestamp (optional, <= 60 chars if string) - Formatted date/time
+    //
+    // 4. Collection: channels/{channelId}/sms/{smsId}
+    //    Fields:
+    //      - id: string (optional, <= 150 chars, immutable on update) - SMS ID
+    //      - usuario: string (optional, <= 100 chars) - Sender username
+    //      - nombreVisible: string (optional, <= 100 chars) - Sender display name
+    //      - texto: string (required, <= 500 chars) - SMS text content
+    //      - timestamp: timestamp | int | string (optional) - Creation timestamp
+    //      - enPantalla: bool (optional) - Whether SMS is currently displayed on screen
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isChannelOwner(channelId) {
+      return isAuthenticated() && request.auth.uid == channelId;
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidOptionalString(data, field, maxLen) {
+      return !(field in data) || data[field] == null ||
+        (data[field] is string && data[field].size() <= maxLen);
+    }
+
+    function isValidOptionalBool(data, field) {
+      return !(field in data) || data[field] == null || data[field] is bool;
+    }
+
+    function isValidOptionalTimestampOrTime(data, field) {
+      return !(field in data) || data[field] == null ||
+        data[field] is timestamp || data[field] is int ||
+        (data[field] is string && data[field].size() <= 64);
+    }
+
+    function isImmutableFieldUnchanged(field) {
+      return !(field in resource.data) ||
+        !(field in request.resource.data) ||
+        request.resource.data[field] == resource.data[field];
+    }
+
+    // ===============================================================
+    // Domain Validators (Used in BOTH create and update)
+    // ===============================================================
+
+    function isValidStudioState(data) {
+      return hasOnlyAllowedFields([
+        'featuredMessage',
+        'featuredSms',
+        'streamContext',
+        'overlayTheme',
+        'activeScene',
+        'updatedAt'
+      ]) &&
+      (!('streamContext' in data) || data.streamContext == null || (data.streamContext is string && data.streamContext.size() <= 300)) &&
+      (!('overlayTheme' in data) || data.overlayTheme == null || data.overlayTheme in ['dark', 'light']) &&
+      isValidOptionalString(data, 'activeScene', 120) &&
+      (!('featuredMessage' in data) || data.featuredMessage == null || (data.featuredMessage is map && data.featuredMessage.keys().size() <= 20)) &&
+      (!('featuredSms' in data) || data.featuredSms == null || (data.featuredSms is map && data.featuredSms.keys().size() <= 20)) &&
+      isValidOptionalTimestampOrTime(data, 'updatedAt');
+    }
+
+    function isValidUsuario(data) {
+      return hasOnlyAllowedFields([
+        'id',
+        'plataforma',
+        'usuario',
+        'nombreVisible',
+        'avatarUrl',
+        'rol',
+        'esSuscriptor',
+        'vozConfig',
+        'notasContexto',
+        'sugerenciaSaludo',
+        'totalMensajes',
+        'primerMensajeEn',
+        'ultimoMensajeEn',
+        'actualizadoEn',
+        'ultimoTexto',
+        'ultimaFechaHora',
+        'silenciadoTts',
+        'baneado'
+      ]) &&
+      data.plataforma in ['twitch', 'youtube'] &&
+      data.rol in ['normal', 'vip', 'mod', 'admin'] &&
+      data.esSuscriptor is bool &&
+      data.usuario is string && data.usuario.size() <= 100 &&
+      (!('notasContexto' in data) || data.notasContexto == null || (data.notasContexto is string && data.notasContexto.size() <= 2000)) &&
+      isValidOptionalString(data, 'id', 150) &&
+      isValidOptionalString(data, 'nombreVisible', 100) &&
+      isValidOptionalString(data, 'avatarUrl', 500) &&
+      (!('vozConfig' in data) || data.vozConfig == null || (data.vozConfig is map && data.vozConfig.keys().size() <= 20)) &&
+      isValidOptionalString(data, 'sugerenciaSaludo', 500) &&
+      (!('totalMensajes' in data) || data.totalMensajes == null || (data.totalMensajes is int && data.totalMensajes >= 0)) &&
+      isValidOptionalTimestampOrTime(data, 'primerMensajeEn') &&
+      isValidOptionalTimestampOrTime(data, 'ultimoMensajeEn') &&
+      isValidOptionalTimestampOrTime(data, 'actualizadoEn') &&
+      isValidOptionalString(data, 'ultimoTexto', 1000) &&
+      isValidOptionalTimestampOrTime(data, 'ultimaFechaHora') &&
+      isValidOptionalBool(data, 'silenciadoTts') &&
+      isValidOptionalBool(data, 'baneado');
+    }
+
+    function isValidMensaje(data) {
+      return hasOnlyAllowedFields([
+        'id',
+        'usuarioId',
+        'plataforma',
+        'usuario',
+        'nombreVisible',
+        'texto',
+        'color',
+        'timestamp',
+        'fechaHora'
+      ]) &&
+      data.texto is string && data.texto.size() <= 1000 &&
+      isValidOptionalString(data, 'id', 150) &&
+      isValidOptionalString(data, 'usuarioId', 150) &&
+      (!('plataforma' in data) || data.plataforma == null || data.plataforma in ['twitch', 'youtube']) &&
+      isValidOptionalString(data, 'usuario', 100) &&
+      isValidOptionalString(data, 'nombreVisible', 100) &&
+      isValidOptionalString(data, 'color', 30) &&
+      isValidOptionalTimestampOrTime(data, 'timestamp') &&
+      isValidOptionalTimestampOrTime(data, 'fechaHora');
+    }
+
+    function isValidSms(data) {
+      return hasOnlyAllowedFields([
+        'id',
+        'usuario',
+        'nombreVisible',
+        'texto',
+        'timestamp',
+        'enPantalla'
+      ]) &&
+      data.texto is string && data.texto.size() <= 500 &&
+      isValidOptionalString(data, 'id', 150) &&
+      isValidOptionalString(data, 'usuario', 100) &&
+      isValidOptionalString(data, 'nombreVisible', 100) &&
+      isValidOptionalTimestampOrTime(data, 'timestamp') &&
+      isValidOptionalBool(data, 'enPantalla');
+    }
+
+    // ===============================================================
+    // Channel-Scoped Community & Studio Namespace
+    // ===============================================================
+
+    match /channels/{channelId} {
+
+      // Runtime Studio State
+      match /runtime/studio_state {
+        allow read: if isChannelOwner(channelId);
+        allow create: if isChannelOwner(channelId) && isValidStudioState(request.resource.data);
+        allow update: if isChannelOwner(channelId) && isValidStudioState(request.resource.data);
+        allow delete: if isChannelOwner(channelId);
+      }
+
+      // Community CRM Users & Message History
+      match /usuarios/{usuarioId} {
+        allow read: if isChannelOwner(channelId);
+        allow create: if isChannelOwner(channelId) && isValidUsuario(request.resource.data);
+        allow update: if isChannelOwner(channelId) &&
+                      isValidUsuario(request.resource.data) &&
+                      isImmutableFieldUnchanged('id');
+        allow delete: if isChannelOwner(channelId);
+
+        match /mensajes/{mensajeId} {
+          allow read: if isChannelOwner(channelId);
+          allow create: if isChannelOwner(channelId) && isValidMensaje(request.resource.data);
+          allow update: if isChannelOwner(channelId) &&
+                        isValidMensaje(request.resource.data) &&
+                        isImmutableFieldUnchanged('id') &&
+                        isImmutableFieldUnchanged('usuarioId');
+          allow delete: if isChannelOwner(channelId);
+        }
+      }
+
+      // Overlay & Studio SMS Queue
+      match /sms/{smsId} {
+        allow read: if isChannelOwner(channelId);
+        allow create: if isChannelOwner(channelId) && isValidSms(request.resource.data);
+        allow update: if isChannelOwner(channelId) &&
+                      isValidSms(request.resource.data) &&
+                      isImmutableFieldUnchanged('id');
+        allow delete: if isChannelOwner(channelId);
+      }
+    }
+
+    // ===============================================================
+    // Default Deny All Other Paths
+    // ===============================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

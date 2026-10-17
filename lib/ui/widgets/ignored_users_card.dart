@@ -103,10 +103,13 @@ class _IgnoredUsersCardState extends State<IgnoredUsersCard> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                '${s.ignoredUsersCount} (${ignoredList.length})',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
+              Flexible(
+                child: Text(
+                  '${s.ignoredUsersCount} (${ignoredList.length})',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               TextButton.icon(
@@ -119,6 +122,7 @@ class _IgnoredUsersCardState extends State<IgnoredUsersCard> {
               ),
             ],
           ),
+
           const SizedBox(height: 8),
 
           // ── Chips de usuarios silenciados ──

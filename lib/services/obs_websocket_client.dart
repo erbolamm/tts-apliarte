@@ -3,7 +3,9 @@ import 'dart:convert';
 
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import '../models/community_models.dart';
 import '../utils/obs_websocket_auth.dart';
+
 
 /// Una escena real de OBS, tal como la devuelve `GetSceneList`.
 class ObsScene {
@@ -158,9 +160,76 @@ class ObsWebSocketClient {
     return res != null;
   }
 
+  /// Obtiene la lista de fuentes (items) de una escena de OBS (`GetSceneItemList`)
+  /// y consulta en modo best-effort el estado de mute (`GetInputMute`). Nunca lanza.
+  Future<List<ObsSourceItem>> obtenerFuentesEscena(String sceneName) async {
+    if (!_identificado || sceneName.trim().isEmpty) return const [];
+    try {
+      final res = await _peticion('GetSceneItemList', {'sceneName': sceneName});
+      final datos = res?['responseData'] as Map<String, dynamic>?;
+      final items = datos?['sceneItems'] as List<dynamic>? ?? const [];
+      final resultado = <ObsSourceItem>[];
+      for (final raw in items) {
+        if (raw is! Map) continue;
+        final sceneItemId = (raw['sceneItemId'] as num?)?.toInt() ?? 0;
+        final sourceName = (raw['sourceName'] as String?) ?? '';
+        final sourceType = (raw['inputKind'] as String?) ??
+            (raw['sourceType'] as String?) ??
+            '';
+        final enabled = (raw['sceneItemEnabled'] as bool?) ?? true;
+        var muted = false;
+        if (sourceName.isNotEmpty) {
+          final muteRes = await _peticion('GetInputMute', {'inputName': sourceName});
+          final muteData = muteRes?['responseData'] as Map<String, dynamic>?;
+          if (muteData != null && muteData['inputMuted'] is bool) {
+            muted = muteData['inputMuted'] as bool;
+          }
+        }
+        resultado.add(
+          ObsSourceItem(
+            sceneItemId: sceneItemId,
+            sourceName: sourceName,
+            sourceType: sourceType,
+            enabled: enabled,
+            muted: muted,
+          ),
+        );
+      }
+      return resultado;
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Activa o desactiva la visibilidad de una fuente en una escena (`SetSceneItemEnabled`).
+  Future<bool> cambiarVisibilidadFuente(
+    String sceneName,
+    int sceneItemId,
+    bool enabled,
+  ) async {
+    if (!_identificado || sceneName.trim().isEmpty) return false;
+    final res = await _peticion('SetSceneItemEnabled', {
+      'sceneName': sceneName,
+      'sceneItemId': sceneItemId,
+      'sceneItemEnabled': enabled,
+    });
+    return res != null;
+  }
+
+  /// Silencia o reactiva una fuente de audio en OBS (`SetInputMute`).
+  Future<bool> cambiarMuteInput(String inputName, bool muted) async {
+    if (!_identificado || inputName.trim().isEmpty) return false;
+    final res = await _peticion('SetInputMute', {
+      'inputName': inputName,
+      'inputMuted': muted,
+    });
+    return res != null;
+  }
+
   Future<void> desconectar() async {
     _identificado = false;
     await _sub?.cancel();
     await _channel?.sink.close();
   }
 }
+
